@@ -1,225 +1,96 @@
-# 📊 Stock Deep Analyzer · 个股深度分析引擎
+<div align="center">
 
-> Float Future · ALPHA TERMINAL · **v2.0.0**
->
-> **AI 驱动 · 22 维数据 × 51 位大佬量化评委 × 17 种机构级分析方法 · 杀猪盘检测 · Bloomberg 风格 HTML 报告**
+# UZI-Skill
 
----
+*"51 个投资大佬帮你看盘，巴菲特和赵老哥终于坐在了同一张桌子上。"*
 
-## ✨ 这是什么
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Python 3.9+](https://img.shields.io/badge/Python-3.9%2B-blue.svg)](https://python.org)
+[![Claude Code](https://img.shields.io/badge/Claude%20Code-Skill-blueviolet)](https://claude.com/product/claude-code)
+[![Dimensions](https://img.shields.io/badge/Dimensions-22-brightgreen)]()
+[![Investors](https://img.shields.io/badge/Investors-51-orange)]()
+[![Methods](https://img.shields.io/badge/Institutional%20Methods-17-red)]()
 
-一个 Claude Code 插件，让 Claude 变成一位**首席股票分析师**。一句话分析任意 A 股 / 港股 / 美股：
+A 股 / 港股 / 美股 · 个股深度分析引擎
 
-```
-> /analyze-stock 水晶光电
-> /dcf 600519
-> /initiate 002273
-> /ic-memo AAPL
-```
+[安装](#安装) · [用法](#用法) · [评审团](#-51-位评审团) · [机构方法](#-17-种机构级方法) · [报告样例](#-报告长什么样) · [FAQ](#-faq)
 
-Claude 会按 **6 个 Task** 完成一次完整深度分析：
-
-1. **Task 1** · 22 维数据采集 (财报 / K线 / 估值 / 龙虎榜 / 资金面 / 政策 / 情绪 / 杀猪盘…)
-2. **Task 1.5** · 机构级建模 (DCF / Comps / LBO / 3-Statement / IC Memo / Porter 五力 / 催化剂日历…)
-3. **Task 2** · 22 维打分 + Claude 亲写的定性评语
-4. **Task 3** · 51 位大佬量化评委裁决 (180 条规则引擎)
-5. **Task 4** · Claude 主导的叙事合成 (多空辩论 + 估值三角验证 + 买入区间)
-6. **Task 5** · 生成 Bloomberg 风格报告
-
-输出产物：
-- `full-report.html` · Bloomberg 风格 16:9 专业仪表盘 (~600 KB 自包含)
-- `full-report-standalone.html` · 内嵌所有资源的离线版
-- `share-card.png` · 1080×1920 朋友圈竖图战报
-- `war-report.png` · 1920×1080 微信群横图
-- `one-liner.txt` · 一句话摘要
+</div>
 
 ---
 
-## 🎯 v2.0 新增：机构级分析层
+## 这是啥
 
-基于 **[anthropics/financial-services-plugins](https://github.com/anthropics/financial-services-plugins)** 的方法论，本插件新增 **17 种机构级分析方法**：
+一句话：输入一只股票，Claude 变成你的私人分析师，跑完 22 个维度的数据、调 17 种华尔街分析模型、让 51 个投资风格完全不同的大佬各自打分，最后吐出一份 600KB 的 Bloomberg 风格报告。
 
-### 📐 估值建模 (5 种)
+```
+/analyze-stock 国盾量子
+```
 
-| 方法 | 产物 | 命令 |
-|---|---|---|
-| **DCF** (2-stage + Gordon Growth) | WACC 分解 + 10 年 FCF 预测 + 5×5 敏感性表 | `/dcf` |
-| **Comps** 同行对标 | PE / PB / PS / EV-EBITDA 分位分析 + 隐含目标价 | `/comps` |
-| **3-Statement** 预测 | 5 年 IS / BS / CF 联动 | `/initiate` |
-| **Quick LBO** | PE 买方 IRR / MOIC 交叉验证 | `/lbo` |
-| **Merger Model** | 并购增厚 / 摊薄分析 | (内部调用) |
+5-8 分钟后你会得到：
+- **一份 HTML 报告** — 可以直接用浏览器打开，自包含，离线也能看
+- **一张朋友圈竖图** — 1080×1920，直接发
+- **一张微信群战报** — 1920×1080
+- **一段话摘要** — 复制粘贴就能发群里
 
-### 📑 研究工作流产物 (7 种)
+## 为什么做这个
 
-| 方法 | 描述 | 命令 |
-|---|---|---|
-| **Initiating Coverage** | 机构首次覆盖报告 (6 章节 · JPM/GS/MS 格式) | `/initiate` |
-| **Earnings Analysis** | 财报 beat/miss 解读 + 投资逻辑影响 | `/earnings` |
-| **Catalyst Calendar** | 未来 60 天事件日历 + 影响分级 | `/catalysts` |
-| **Thesis Tracker** | 投资逻辑 5 支柱运行跟踪 | `/thesis` |
-| **Morning Note** | 晨报简讯 | (内部) |
-| **Idea Screen** | 5 套量化筛选 (value/growth/quality/gulp/short) | `/screen` |
-| **Sector Overview** | 行业综述 | (内部) |
+之前看一只票的流程：东方财富翻基本面 → 同花顺看 K 线 → 雪球刷大 V 说了啥 → 研报系统找卖方观点 → Excel 算个 DCF → 结果买进去还是亏。
 
-### 🏛️ 深度决策方法 (6 种)
+这些活儿本质上就是"搜集信息 → 多角度分析 → 给个结论"，让 AI 全干了不行吗？
 
-| 方法 | 描述 | 命令 |
-|---|---|---|
-| **IC Memo** | 投委会备忘录 8 章节 + 三情景回报 | `/ic-memo` |
-| **Unit Economics** | LTV/CAC 或毛利瀑布 | (内部) |
-| **Value Creation Plan** | EBITDA 桥 + 5 大杠杆 | (内部) |
-| **DD Checklist** | 5 工作流 21 项尽调清单 | `/dd` |
-| **Porter 5 Forces + BCG** | 竞争格局结构化分析 | (内部) |
-| **Portfolio Rebalance** | 组合漂移分析 | (内部) |
+市面上看了一圈，要么是输出三段废话的 GPT wrapper，要么是用不起的机构终端。Anthropic 出了个 [financial-services-plugins](https://github.com/anthropics/financial-services-plugins)，方法论很好（DCF / Comps / LBO 那套），但完全是美股视角 + 全要付费数据源。
+
+所以自己搓了一个。**全免费数据源，零 API key，A 股直接能跑。**
 
 ---
 
-## 🧠 51 位投资大佬量化评委
+## 安装
 
-每位大佬有明确的 **量化规则集**（`lib/investor_criteria.py` 共 **180 条规则**），每条建议必须击中具体规则：
-
-- **巴菲特** · 7 条 · ROE 连续 5Y>15% / 净利率>15% / 负债率<50% / FCF+ / 护城河≥24 / PE 中位数以下 / 5Y 分红
-- **格雷厄姆** · 6 条 · PE<15 · PB<1.5 · PE×PB<22.5 (22.5 定律) · 流动比>2 · 连续 6Y 盈利 · 现净资产 20% 以上
-- **段永平** · 4 条 · 三问法 (Stop Doing / 看 10 年能否看懂 / 是否本分生意)
-- **赵老哥** · 5 条 · 龙虎榜活跃 · Stage 2 动量 · 板块龙头 · 涨幅榜位置 · 两板之后
-- ... (51 人 × 180 规则)
-
-每次裁决输出：
-```json
-{
-  "investor_id": "buffett",
-  "score": 62,
-  "signal": "neutral",
-  "headline": "观望：护城河 27/40 可见；但 ROE 5 年最低 6.7%，达标率仅 0/5",
-  "pass_rules": [{"name": "资产负债率 < 50%", "msg": "资产负债率 30% 保守", "weight": 3}],
-  "fail_rules": [{"name": "ROE 连续 5 年 > 15%", "msg": "...", "weight": 5}],
-  "rationale": "✅ 符合标准...\n❌ 未达标准..."
-}
-```
-
----
-
-## 🎭 流派分布
-
-| 组 | 人数 | 代表 |
-|---|---|---|
-| **A · 经典价值** | 6 | 巴菲特 / 格雷厄姆 / 费雪 / 芒格 / 邓普顿 / 卡拉曼 |
-| **B · 成长投资** | 4 | 林奇 / 欧奈尔 / 蒂尔 / 木头姐 |
-| **C · 宏观对冲** | 5 | 索罗斯 / 达里奥 / 马克斯 / 德鲁肯米勒 / 罗伯逊 |
-| **D · 技术趋势** | 4 | 利弗莫尔 / 米内尔维尼 / 达瓦斯 / 江恩 |
-| **E · 中国价投** | 6 | 段永平 / 张坤 / 朱少醒 / 谢治宇 / 冯柳 / 邓晓峰 |
-| **F · A 股游资** | 23 | 章盟主 / 赵老哥 / 佛山无影脚 / 炒股养家 / 北京炒家 / 鑫多多 ... |
-| **G · 量化系统** | 3 | 西蒙斯 / 索普 / 大卫·肖 |
-
-## 🏗️ 架构
-
-```
-stock-deep-analyzer/
-├── .claude-plugin/
-│   ├── plugin.json              # 插件元数据 + 命令清单
-│   └── marketplace.json         # Marketplace 发布配置
-├── commands/                    # 14 个 slash commands
-│   ├── analyze-stock.md         #   /analyze-stock
-│   ├── quick-scan.md            #   /quick-scan
-│   ├── panel-only.md            #   /panel-only
-│   ├── scan-trap.md             #   /scan-trap
-│   ├── dcf.md                   #   /dcf
-│   ├── comps.md                 #   /comps
-│   ├── lbo.md                   #   /lbo
-│   ├── initiate.md              #   /initiate
-│   ├── earnings.md              #   /earnings
-│   ├── catalysts.md             #   /catalysts
-│   ├── thesis.md                #   /thesis
-│   ├── screen.md                #   /screen
-│   ├── ic-memo.md               #   /ic-memo
-│   └── dd.md                    #   /dd
-├── skills/
-│   ├── deep-analysis/           # ★ 主工作流 (6 Task)
-│   │   ├── SKILL.md             # Claude 的分析师手册 (v2.0)
-│   │   ├── references/
-│   │   │   ├── task1-data-collection.md
-│   │   │   ├── task1.5-institutional-modeling.md  # ★ 新增
-│   │   │   ├── task2-dimension-scoring.md
-│   │   │   ├── task3-investor-panel.md
-│   │   │   ├── task4-synthesis.md
-│   │   │   ├── task5-report-assembly.md
-│   │   │   └── fin-methods/              # ★ 17 种方法论
-│   │   │       └── README.md
-│   │   ├── assets/
-│   │   │   ├── report-template.html      # Bloomberg 风格模板
-│   │   │   ├── avatars/{51}.svg          # 51 张像素头像
-│   │   │   ├── data-contracts.md
-│   │   │   └── quality-checklist.md
-│   │   └── scripts/
-│   │       ├── lib/
-│   │       │   ├── data_sources.py       # 多源 fallback (5+ hosts)
-│   │       │   ├── cache.py              # 分层 TTL 缓存
-│   │       │   ├── market_router.py      # A/H/U 路由
-│   │       │   ├── seat_db.py            # 22 位游资席位
-│   │       │   ├── investor_db.py        # 51 人元数据
-│   │       │   ├── investor_personas.py  # 51 × 270 条真实原话
-│   │       │   ├── investor_criteria.py  # ★ 180 条量化规则
-│   │       │   ├── investor_evaluator.py # ★ 规则引擎
-│   │       │   ├── stock_features.py     # ★ 108 标准化特征
-│   │       │   ├── data_integrity.py     # ★ 100% 覆盖度校验
-│   │       │   ├── fin_models.py         # ★ DCF/Comps/3-Stmt/LBO/Merger
-│   │       │   ├── research_workflow.py  # ★ 7 种研究产物
-│   │       │   ├── deep_analysis_methods.py # ★ 6 种 PE/IB/WM 方法
-│   │       │   └── web_search.py         # ddgs 封装 + 12h 缓存
-│   │       ├── fetch_*.py                # 22 个维度 fetcher
-│   │       ├── compute_deep_methods.py   # ★ dim 20/21/22 生成
-│   │       ├── run_real_test.py          # ★ 6-Task 主流水线
-│   │       ├── assemble_report.py        # HTML 装配 (~2000 行)
-│   │       ├── inline_assets.py          # 自包含 HTML
-│   │       ├── render_share_card.py      # 朋友圈 PNG
-│   │       └── render_war_report.py      # 战报 PNG
-│   ├── investor-panel/
-│   ├── lhb-analyzer/
-│   └── trap-detector/
-├── README.md
-└── requirements.txt
-```
-
----
-
-## 📦 安装
-
-### 1. 安装插件
+### Claude Code（推荐）
 
 ```bash
-# 在 Claude Code 里
-/plugin marketplace add /path/to/stock-deep-analyzer
+# 添加 marketplace
+/plugin marketplace add wbh604/UZI-Skill
+
+# 安装
 /plugin install stock-deep-analyzer@float-future-stock-analyzer
 ```
 
-或直接 git clone：
+### Codex / 其他 Agent（Skills 方式）
+
+如果你用 OpenAI Codex、Devin 或其他支持 Skills 的 agent，可以直接引用 skill 文件：
+
 ```bash
-git clone https://github.com/float-future/stock-deep-analyzer
-cd stock-deep-analyzer
+# 克隆仓库
+git clone https://github.com/wbh604/UZI-Skill.git
+
+# 把 skills/ 目录链接到你的 agent 工作区
+# Codex:
+cp -r UZI-Skill/skills/ .claude/skills/
+
+# 或直接在 agent 配置里引用 SKILL.md 路径
+# skills/deep-analysis/SKILL.md  ← 主分析工作流
+# skills/investor-panel/SKILL.md ← 51 评委规则引擎
+# skills/lhb-analyzer/SKILL.md   ← 龙虎榜游资匹配
+# skills/trap-detector/SKILL.md  ← 杀猪盘检测
 ```
 
-### 2. 安装 Python 依赖
+### Python 依赖
 
 ```bash
+cd UZI-Skill
 pip install -r requirements.txt
-playwright install chromium  # 用于 PNG 渲染
-```
 
-### 3. 启动
-
-```bash
-# 在 Claude Code 会话里
-/analyze-stock 水晶光电
-
-# 或直接跑 Python 流水线（调试用）
-python skills/deep-analysis/scripts/run_real_test.py 002273.SZ
+# 如果要生成朋友圈 PNG（可选）
+playwright install chromium
 ```
 
 ---
 
-## 🚀 用法示例
+## 用法
 
-### 完整深度分析 (6 Task · 约 5-8 分钟)
+### 完整深度分析（5-8 分钟）
 
 ```
 /analyze-stock 水晶光电
@@ -228,154 +99,202 @@ python skills/deep-analysis/scripts/run_real_test.py 002273.SZ
 /analyze-stock AAPL
 ```
 
-### 只跑 DCF 估值
+### 专项命令
 
-```
-/dcf 600519
-```
-输出：WACC 分解 / 10 年 FCF / 终值 / 内在价值 / 5×5 敏感性表 / 安全边际
-
-### 只跑同行对标
-
-```
-/comps 002273
-```
-输出：同行池 / PE/PB 分位 / 中位数隐含价 / 估值结论
-
-### 机构首次覆盖报告
-
-```
-/initiate 600519
-```
-输出：推荐评级 / 目标价 / 投资论点 / 估值桥 / 核心风险 / 财务快照
-
-### 投委会备忘录
-
-```
-/ic-memo 002273
-```
-输出：8 章节 IC Memo · Bull/Base/Bear 三情景回报 · Top 3 风险+缓解
-
-### 催化剂日历
-
-```
-/catalysts 002273
-```
-输出：未来 60 天事件时间线 · 高/中/低影响分级
-
-### 30 秒速判
-
-```
-/quick-scan 002273
-```
-仅跑核心维度 + Top 10 投资者，不生成 PNG。
-
-### 只看投票
-
-```
-/panel-only 600519
-```
-
-### 杀猪盘排查
-
-```
-/scan-trap 002273
-/scan-trap 朋友推荐我买这只票
-```
+| 命令 | 干嘛的 |
+|---|---|
+| `/dcf 600519` | DCF 估值 · WACC + 5×5 敏感性表 |
+| `/comps 002273` | 同行对标 · PE/PB 分位分析 |
+| `/lbo 600519` | LBO 测试 · PE 买方能赚多少 IRR |
+| `/initiate 002273` | 机构首次覆盖报告 · JPM/GS 格式 |
+| `/ic-memo 002273` | 投委会备忘录 · 三情景回报 |
+| `/earnings 002273` | 财报解读 · beat/miss 检测 |
+| `/catalysts 002273` | 催化剂日历 · 未来 60 天 |
+| `/thesis 002273` | 投资逻辑追踪 · 5 支柱监控 |
+| `/screen 002273` | 5 套量化筛选 · value/growth/quality |
+| `/dd 002273` | 尽调清单 · 5 工作流 21 项 |
+| `/quick-scan 002273` | 30 秒速判 |
+| `/panel-only 600519` | 只看 51 评委投票 |
+| `/scan-trap 002273` | 杀猪盘排查 |
 
 ---
 
-## 🧠 Claude 是分析师，不是脚本运行器
+## 🎭 51 位评审团
 
-本插件的核心设计原则（写在 `skills/deep-analysis/SKILL.md` 里）：
+不是模板话术。每个人有自己的**量化规则集**（共 180 条），给出的建议必须引用具体命中了哪条：
 
-> **Claude 不是脚本的搬运工** — 不要只把 `cat xxx.json` 往报告里贴。
-> **Claude 是分析师** — 读原始数据 + 量化结果，然后用判断串起一个有冲突感、有洞察的叙事。
+| 组 | 风格 | 人数 | 代表人物 |
+|---|---|---|---|
+| A | 经典价值 | 6 | 巴菲特 · 格雷厄姆 · 芒格 · 费雪 · 邓普顿 · 卡拉曼 |
+| B | 成长投资 | 4 | 林奇 · 欧奈尔 · 蒂尔 · 木头姐 |
+| C | 宏观对冲 | 5 | 索罗斯 · 达里奥 · 霍华德马克斯 · 德鲁肯米勒 · 罗伯逊 |
+| D | 技术趋势 | 4 | 利弗莫尔 · 米内尔维尼 · 达瓦斯 · 江恩 |
+| E | 中国价投 | 6 | 段永平 · 张坤 · 朱少醒 · 谢治宇 · 冯柳 · 邓晓峰 |
+| F | A 股游资 | 23 | 章盟主 · 赵老哥 · 炒股养家 · 佛山无影脚 · 北京炒家 · 鑫多多 … |
+| G | 量化系统 | 3 | 西蒙斯 · 索普 · 大卫·肖 |
 
-脚本负责算数，Claude 负责：
-- **假设审查** (Task 1.5) — 默认 DCF 用 stage1=10%, beta=1.0，但半导体公司应该用 22% / 1.4
-- **定性评语** (Task 2) — 每个维度写 1-2 句"数据背后的故事"
-- **叙事合成** (Task 4) — 多空辩论、估值三角、买入区间、金句
-- **金句审查** (Task 5) — punchline 必须有冲突感 + 引用具体数字
+**举个例子**：
+
+> **巴菲特** 给水晶光电打 62 分 · 中性
+> "观望：护城河 27/40 可见；但 ROE 5 年最低 6.7%，达标率仅 0/5"
+> ✅ 资产负债率 30% 保守 · ❌ ROE 5 年最低 6.7%
+
+> **木头姐** 给国盾量子打 100 分 · 看多
+> "量子通信处于 S 曲线拐点，TAM 每年 >30% 增长——买它就是买未来！"
+> ✅ 属于颠覆式创新平台 · ✅ 行业增速 35%
+
+> **卡拉曼** 给水晶光电打 0 分 · 看空
+> "看空核心：无 30% 安全边际"
 
 ---
 
-## 📚 17 种方法论详细参考
+## 📐 17 种机构级方法
 
-完整方法论文档见 `skills/deep-analysis/references/fin-methods/README.md`，列出了每种方法的：
-- Python 模块路径
-- 源 SKILL.md (Anthropic 官方)
-- A 股落地参数（rf / ERP / 税率 / 终值 g）
-- 输入 / 输出 schema
+从 [anthropics/financial-services-plugins](https://github.com/anthropics/financial-services-plugins) 移植方法论，适配了 A 股参数（rf=2.5% / ERP=6% / 税率 25% / 终值 g=2.5%）：
+
+**估值建模**
+- DCF（WACC 拆解 + 两段 FCF + Gordon Growth 终值 + 5×5 敏感性热力图）
+- Comps 同行对标（PE / PB / EV-EBITDA 分位 + 隐含目标价）
+- 三表预测（5 年 IS / BS / CF 联动）
+- Quick LBO（PE 基金视角 IRR 交叉校验）
+- 并购增厚/摊薄模型
+
+**研究工作流**
+- 首次覆盖报告（JPM/GS/MS 格式 · 评级 + 目标价 + 论点 + 风险）
+- 财报 beat/miss 解读
+- 催化剂日历（真实事件提取 + 未来预排 + 影响分级）
+- 投资逻辑追踪（5 支柱健康度）
+- 晨报 · 量化筛选 · 行业综述
+
+**深度决策**
+- IC 投委会备忘录（8 章节 · Bull/Base/Bear 三情景）
+- Porter 五力 + BCG 矩阵
+- DD 尽调清单（5 工作流 21 项 · 自动标注完成状态）
+- 单位经济学 · 价值创造计划 · 组合再平衡
 
 ---
 
-## 🔧 数据源矩阵
+## 📸 报告长什么样
 
-全部免费、零 API key，多层 fallback：
+跑完之后你会得到一个 ~600KB 的 HTML 文件，里面包含：
 
-| 维度 | 主数据源 | Fallback 链 |
+- 综合评分仪表盘（总分 + 定调 + 杀猪盘等级）
+- 多空大分歧辩论（Top Bull vs Top Bear 互喷 3 轮，引用数字）
+- 51 人审判席（灯牌 + 聊天室两种视图）
+- 机构级估值建模区（DCF 敏感性热力图 + Comps 分位表 + LBO 卡 + 首次覆盖 + IC Memo + 催化剂时间线 + Porter 雷达图）
+- 22 维深度卡（每维有独立可视化：K 线蜡烛图 / PE Band / 雷达图 / 供应链流程图 / 温度计 / 环形图…）
+- 四派系买入区间
+- 朋友圈竖图 + 战报横图（Playwright 截图）
+
+---
+
+## 🔧 数据源
+
+全部免费，零 API key：
+
+| 数据 | 主源 | 备用 |
 |---|---|---|
-| 实时行情 / PE / 市值 | push2.eastmoney.com | xueqiu → qt.gtimg.cn → sina → baidu |
-| 财报历史 | akshare `stock_financial_em` | 雪球 f10 |
-| K线 / 技术指标 | akshare `stock_zh_a_hist` | yfinance |
-| 估值分位 | akshare `stock_zh_valuation_baidu` | 手算 |
-| 龙虎榜 | akshare `stock_lhb_detail_em` | 东财 |
-| 事件 / 研报 / 公告 | akshare `stock_research_report_em` + `stock_zh_a_disclosure_report_cninfo` | ths |
-| 港股 | akshare `stock_hk_*` | yfinance |
-| 美股 | yfinance | akshare `stock_us_hist` |
-| 宏观 / 政策 / 原材料 / 杀猪盘 / 舆情 | **ddgs web search** (多站点 query) | — |
+| 实时行情 / PE / 市值 | 东方财富 push2 | 雪球 → 腾讯 → 新浪 → 百度 |
+| 财报历史 | akshare | 雪球 f10 |
+| K 线 / 技术指标 | akshare | yfinance |
+| 龙虎榜 / 北向 / 两融 | akshare | 东财 |
+| 研报 / 公告 | 巨潮 cninfo + akshare | 同花顺 |
+| 港股 | akshare hk | yfinance |
+| 美股 | yfinance | akshare us |
+| 宏观 / 政策 / 舆情 / 杀猪盘 | DuckDuckGo web search | — |
+
+多层 fallback 链 — 一个源挂了自动切下一个。
 
 ---
 
-## 📊 水晶光电 (002273.SZ) 实测输出样例
+## 📁 项目结构
 
 ```
-[████████████████████] 100% · v2.0 新流水线已完成
-
-🔢 数据完整性: 100% · 18/18 关键字段 · 0 缺失
-
-📐 Task 1.5 · 机构级建模:
-  DCF  · WACC 6.96% · 内在价值 ¥20.73 · 安全边际 -28.6% · 🟠 略微高估
-  LBO  · IRR 21.7% · MOIC 2.67x · 🟢 PE 买方可赚 20%+
-  Comps · 待同行补全
-  3-Stmt · Y5 营收 82.4 亿 · 净利 12.1 亿
-
-🏛️ 首次覆盖: 减持 (Underperform) · 目标价 ¥20.73 · 空间 -28.6%
-📋 IC Memo: ⚪ 观望 (HOLD)
-⚔️ Porter: BCG Dog · 行业吸引力 50%
-📋 DD Checklist: 48% 自动命中 · 11 项待人工复核
-📅 催化剂: 未来 30 天 1 个高影响事件
-
-🎭 51 位评委:
-  看多 26 · 中性 15 · 看空 10 · 平均 64.9 分
-  巴菲特  · 62 · neutral · 观望：护城河 27/40 可见；但 ROE 5 年最低 6.7%，达标率仅 0/5
-  格雷厄姆 · 44 · neutral · 观望：连续 6 年盈利；但 PE 35.055 高于 15
-  卡拉曼  ·  0 · bearish · 看空核心：无 30% 安全边际
-
-💥 Great Divide (需 Claude 合成):
-  "DCF 说高估 28%，但 LBO 说 PE 仍能赚 21% IRR —
-   市场把光学行业增速定得比 PE 基金更悲观。"
-
-→ reports/002273.SZ_20260415/full-report-standalone.html (531 KB)
+UZI-Skill/
+├── .claude-plugin/
+│   ├── plugin.json              # 插件清单
+│   └── marketplace.json         # Marketplace 配置
+├── commands/                    # 14 个 slash commands
+├── skills/
+│   ├── deep-analysis/           # ★ 主工作流 (6 Task)
+│   │   ├── SKILL.md             # Claude 分析师手册
+│   │   ├── references/          # 方法论文档 (8 篇)
+│   │   ├── assets/              # HTML 模板 + 51 张头像
+│   │   └── scripts/
+│   │       ├── lib/             # 15 个核心模块
+│   │       │   ├── fin_models.py         # DCF/Comps/LBO/3-Stmt/Merger
+│   │       │   ├── research_workflow.py  # 7 种研究产物
+│   │       │   ├── deep_analysis_methods.py # 6 种 PE/IB/WM 方法
+│   │       │   ├── investor_criteria.py  # 51人 × 180 条规则
+│   │       │   ├── investor_evaluator.py # 规则引擎
+│   │       │   ├── stock_features.py     # 108 标准化特征
+│   │       │   └── ...
+│   │       ├── fetch_*.py       # 22 个维度 fetcher
+│   │       ├── compute_deep_methods.py  # 机构建模计算
+│   │       ├── assemble_report.py       # HTML 装配
+│   │       └── run_real_test.py         # 主流水线
+│   ├── investor-panel/          # 评审团 skill
+│   ├── lhb-analyzer/            # 龙虎榜 skill
+│   └── trap-detector/           # 杀猪盘 skill
+├── requirements.txt
+├── LICENSE
+└── README.md
 ```
+
+---
+
+## 🧠 设计理念
+
+**Claude 是分析师，不是脚本搬运工。**
+
+脚本负责采集数据和计算（22 维 fetcher + 17 种模型），但最终的判断——"这只票到底能不能买"——必须 Claude 自己给。
+
+具体来说 Claude 要做三件事情：
+1. **审查假设**：DCF 默认用 stage1=10%、beta=1.0，但半导体公司应该用 22% / 1.4，Claude 要自己判断和调整
+2. **写定性评语**：每个维度不是只给个分数，还要写"数据背后的故事是什么"
+3. **构建叙事**：多空辩论、估值三角验证（DCF 说高估但 LBO 说能赚的时候，这个冲突本身就是信息）
+
+这些写在 `SKILL.md` 里，作为 Claude 的硬性约束。
+
+---
+
+## ❓ FAQ
+
+**Q: 跑一次要多久？**
+A: 5-8 分钟，主要是数据采集慢（22 个维度要调十几个 API）。纯计算的机构建模部分 < 1 秒。
+
+**Q: 需要付费数据源吗？**
+A: 不需要。全部免费源（akshare / yfinance / DuckDuckGo / 巨潮 / 东方财富 / 雪球），零 API key。
+
+**Q: 港股美股能用吗？**
+A: 能。`/analyze-stock 00700.HK` 或 `/analyze-stock AAPL`。
+
+**Q: 数据准不准？**
+A: 实时数据走东方财富 / 雪球，财报走巨潮 / akshare，和你在东方财富 App 上看到的一样。但 web search 质量不稳定（DuckDuckGo 中文搜索有时会返回无关结果），所以 Claude 会做二次审查。
+
+**Q: 能当投资建议吗？**
+A: 不能。这是工具不是神仙，51 个大佬的意见都是规则引擎模拟的，不代表真人观点。买不买你自己决定。
+
+---
+
+## 🤝 致谢
+
+- [anthropics/financial-services-plugins](https://github.com/anthropics/financial-services-plugins) — 机构级分析方法论
+- [akshare](https://github.com/akfamily/akshare) — A 股数据引擎
+- [titanwings/colleague-skill](https://github.com/titanwings/colleague-skill) — Skill 架构参考
+- [virattt/ai-hedge-fund](https://github.com/virattt/ai-hedge-fund) — Pydantic Signal 模式
+- [TauricResearch/TradingAgents](https://github.com/TauricResearch/TradingAgents) — 多空辩论循环
 
 ---
 
 ## ⚠️ 免责声明
 
-本工具由 AI 模型基于公开信息生成报告，所有数据通过开源库与 web search 获取，**可能存在滞后或误差**。
-
-报告中的评分、建议、模拟评语**均为算法模拟**，不代表任何真实投资者的实际观点。
-
-**本工具不构成任何投资建议**，投资者应独立判断并承担投资风险。
+本工具由 AI 模型基于公开数据生成分析报告。所有评分、建议、模拟评语均为算法输出，不代表任何真实投资者的实际观点。**不构成投资建议**，投资有风险，入市需谨慎。
 
 ---
 
-## 🪪 License
+<div align="center">
 
-MIT — 但请尊重数据源各自的使用条款（akshare / yfinance / 雪球 / 东方财富）。
+MIT License · Made by Float Future · O.o
 
----
-
-Generated with ❤️ by Float Future · v2.0.0 · O.o
+</div>
