@@ -457,26 +457,28 @@ def generate_panel(dims_scored: dict, raw: dict) -> dict:
             verdict = "不适合"
             score = 0
             confidence = 0
+            skip_reason = verdict_obj.get("skip_reason", "不在能力圈")
+            headline = f"不适合 — {skip_reason}"
+            comment = f"不在能力圈范围内，不做评价。\n{headline}"
+            reasoning = verdict_obj.get("rationale", "")
         else:
             verdict = _score_to_verdict(score, sig)
 
-        # Persona voice layer — wraps the rule-based headline in the investor's
-        # signature quote style (from investor_personas.py)
-        ctx = {
-            "name": basic_ctx.get("name", "这只票"),
-            "industry": basic_ctx.get("industry", "该行业"),
-            "price": basic_ctx.get("price", "—"),
-            "pe": basic_ctx.get("pe_ttm", "—"),
-            "roe": str((fin_ctx.get("roe_history") or ["—"])[-1]),
-            "stage": kline_ctx.get("stage", "—"),
-            "growth": fin_ctx.get("revenue_growth", "—"),
-        }
-        persona_line = _persona_comment(inv_id, sig, ctx)
+            # Persona voice layer
+            ctx = {
+                "name": basic_ctx.get("name", "这只票"),
+                "industry": basic_ctx.get("industry", "该行业"),
+                "price": basic_ctx.get("price", "—"),
+                "pe": basic_ctx.get("pe_ttm", "—"),
+                "roe": str((fin_ctx.get("roe_history") or ["—"])[-1]),
+                "stage": kline_ctx.get("stage", "—"),
+                "growth": fin_ctx.get("revenue_growth", "—"),
+            }
+            persona_line = _persona_comment(inv_id, sig, ctx)
 
-        # Final comment = persona quote + rule-hit evidence
-        headline = verdict_obj["headline"]
-        comment = f"{persona_line}\n{headline}"
-        reasoning = verdict_obj["rationale"]
+            headline = verdict_obj["headline"]
+            comment = f"{persona_line}\n{headline}"
+            reasoning = verdict_obj["rationale"]
 
         v_key = {"强烈买入": "strongly_buy", "买入": "buy", "关注": "watch",
                  "观望": "wait", "回避": "avoid", "不适合": "skip"}.get(verdict, "n_a")

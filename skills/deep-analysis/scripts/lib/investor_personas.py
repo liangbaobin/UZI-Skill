@@ -567,8 +567,8 @@ def get_comment(investor_id: str, signal: str, ctx: dict) -> str:
     import random
     entry = PERSONAS.get(investor_id)
     if not entry:
-        return _GENERIC_FALLBACK[signal][0]
-    lines = entry.get(signal) or _GENERIC_FALLBACK[signal]
+        return _GENERIC_FALLBACK.get(signal, _GENERIC_FALLBACK["neutral"])[0]
+    lines = entry.get(signal) or _GENERIC_FALLBACK.get(signal, _GENERIC_FALLBACK["neutral"])
     line = random.choice(lines)
     # Format safely — missing keys fall back to '—'
     try:
@@ -589,6 +589,7 @@ _GENERIC_FALLBACK = {
     "bullish": ["数据支持买入。"],
     "bearish": ["数据不支持。"],
     "neutral": ["先观察。"],
+    "skip": ["不在能力圈范围内，不做评价。"],
 }
 
 
