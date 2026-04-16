@@ -2412,20 +2412,66 @@ footer strong { color: var(--text-dim); }
     <div style="margin-top:12px;font-size:12px;color:#9ca3af">截图分享到朋友圈 / 微信群 / 社区</div>
   </div>
 
-  <!-- Share overlay modal -->
+  <!-- Share overlay modal — 包含完整分析摘要 -->
   <div id="share-overlay" onclick="if(event.target===this)this.style.display='none'" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);z-index:9999;justify-content:center;align-items:center;backdrop-filter:blur(4px)">
-    <div style="background:#fff;border-radius:16px;padding:30px;max-width:360px;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,0.3)">
-      <div style="font-size:20px;font-weight:800;color:#111;margin-bottom:4px">{{NAME}} · {{OVERALL_SCORE_INT}} 分</div>
-      <div style="font-size:13px;color:#6b7280;margin-bottom:16px">{{VERDICT_LABEL}} · 51 位大佬 {{BULL_COUNT}} 人看多</div>
-      <div style="margin-bottom:16px">
-        <img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=https://github.com/wbh604/UZI-Skill&color=06b6d4" alt="QR Code" style="width:160px;height:160px;border-radius:8px;border:2px solid #e5e7eb" />
+    <div style="background:#fff;border-radius:16px;padding:28px 24px;max-width:380px;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,0.3);max-height:90vh;overflow-y:auto">
+      <!-- 标题 -->
+      <div style="font-size:22px;font-weight:900;color:#111">{{NAME}}</div>
+      <div style="font-size:14px;color:#6b7280;margin:4px 0 12px">{{TICKER}} · ¥{{PRICE}}</div>
+
+      <!-- 评分 -->
+      <div style="background:linear-gradient(135deg,#fef3c7,#fff7ed);border:2px solid #f59e0b;border-radius:16px;padding:16px;margin-bottom:16px">
+        <div style="font-size:48px;font-weight:900;color:#d97706">{{OVERALL_SCORE_INT}}<span style="font-size:20px;color:#92400e">/100</span></div>
+        <div style="font-size:16px;font-weight:700;color:#92400e">{{VERDICT_LABEL}}</div>
       </div>
-      <div style="font-size:11px;color:#6b7280;margin-bottom:4px">扫码获取分析工具</div>
-      <a href="https://github.com/wbh604/UZI-Skill" target="_blank" style="font-size:13px;color:#06b6d4;text-decoration:none;font-weight:600">github.com/wbh604/UZI-Skill</a>
-      <div style="margin-top:16px;padding-top:12px;border-top:1px solid #f3f4f6">
-        <div style="font-size:10px;color:#9ca3af;letter-spacing:2px">POWERED BY FloatFu-true</div>
+
+      <!-- 投票分布 -->
+      <div style="text-align:left;margin-bottom:14px;padding:12px;background:#f9fafb;border-radius:10px">
+        <div style="font-size:11px;color:#6b7280;margin-bottom:8px;letter-spacing:1px">51 位大佬投票</div>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+          <span style="font-size:11px;color:#6b7280;width:40px">看多</span>
+          <div style="flex:1;height:8px;background:#e5e7eb;border-radius:4px;overflow:hidden">
+            <div style="height:100%;background:#10b981;width:calc({{BULL_COUNT}} / {{TOTAL_COUNT}} * 100%)"></div>
+          </div>
+          <span style="font-size:12px;font-weight:700;color:#10b981;width:30px">{{BULL_COUNT}}</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+          <span style="font-size:11px;color:#6b7280;width:40px">中性</span>
+          <div style="flex:1;height:8px;background:#e5e7eb;border-radius:4px;overflow:hidden">
+            <div style="height:100%;background:#94a3b8;width:calc({{NEUT_COUNT}} / {{TOTAL_COUNT}} * 100%)"></div>
+          </div>
+          <span style="font-size:12px;font-weight:700;color:#6b7280;width:30px">{{NEUT_COUNT}}</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="font-size:11px;color:#6b7280;width:40px">看空</span>
+          <div style="flex:1;height:8px;background:#e5e7eb;border-radius:4px;overflow:hidden">
+            <div style="height:100%;background:#ef4444;width:calc({{BEAR_COUNT}} / {{TOTAL_COUNT}} * 100%)"></div>
+          </div>
+          <span style="font-size:12px;font-weight:700;color:#ef4444;width:30px">{{BEAR_COUNT}}</span>
+        </div>
       </div>
-      <button onclick="this.parentElement.parentElement.style.display='none'" style="margin-top:14px;background:#f3f4f6;border:none;padding:8px 24px;border-radius:8px;color:#6b7280;cursor:pointer;font-size:13px">关闭</button>
+
+      <!-- Punchline -->
+      <div style="padding:10px;background:#fef2f2;border-left:3px solid #f59e0b;text-align:left;margin-bottom:14px;border-radius:0 8px 8px 0">
+        <div style="font-size:12px;font-weight:700;color:#92400e">💬 {{PUNCHLINE}}</div>
+      </div>
+
+      <!-- 杀猪盘 -->
+      <div style="margin-bottom:14px;font-size:12px">
+        <span style="color:{{TRAP_COLOR}}">{{TRAP_EMOJI}} 杀猪盘检测：{{TRAP_LEVEL}}</span>
+      </div>
+
+      <!-- QR -->
+      <div style="margin-bottom:12px">
+        <img src="https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=https://github.com/wbh604/UZI-Skill&color=06b6d4" alt="QR" style="width:80px;height:80px;border-radius:6px" />
+        <div style="font-size:10px;color:#9ca3af;margin-top:4px">扫码获取分析工具</div>
+      </div>
+
+      <a href="https://github.com/wbh604/UZI-Skill" target="_blank" style="font-size:12px;color:#06b6d4;text-decoration:none;font-weight:600">github.com/wbh604/UZI-Skill</a>
+      <div style="margin-top:12px;padding-top:10px;border-top:1px solid #f3f4f6">
+        <div style="font-size:9px;color:#d1d5db;letter-spacing:2px">POWERED BY FloatFu-true · 不构成投资建议</div>
+      </div>
+      <button onclick="this.parentElement.parentElement.style.display='none'" style="margin-top:10px;background:#f3f4f6;border:none;padding:8px 20px;border-radius:8px;color:#6b7280;cursor:pointer;font-size:12px">关闭</button>
     </div>
   </div>
 
