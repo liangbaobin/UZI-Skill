@@ -159,9 +159,34 @@ adjusted = compute_dcf(features, assumptions={"stage1_growth": 0.18, "beta": 1.3
 
 ---
 
-### Task 3 · 51 评委量化裁决 (🤖 纯脚本)
+### Task 3 · 51 评委量化裁决 (🤖 规则引擎 + **🧠 你的判断**)
 
-`lib/investor_evaluator.py` 会自动跑完 51 人，每人基于 `investor_criteria.py` 里的规则打分。你不用干预这一步。
+`lib/investor_evaluator.py` 会自动跑完 51 人的三层评估：
+1. **现实检验层**（`investor_knowledge.py`）：该投资者看不看这个市场？有没有实际持仓？行业亲和度多少？
+2. **规则引擎层**（`investor_criteria.py`）：180 条量化规则打分
+3. **合成层**：持仓加分 + 亲和度调整 + 规则分 → 最终分数
+
+**三个新机制**：
+- **市场过滤**：游资分析美股 → 直接标 "不适合"，不跑规则（巴菲特不看科创板小票也类似）
+- **持仓加分**：巴菲特分析苹果 → 自动识别"伯克希尔第一大持仓" → signal override 为 bullish + 额外 +15 分
+- **行业亲和度**：木头姐遇到量子公司 → +10，遇到白酒 → -10
+
+### 🧠 你在 Task 3 之后必须做的事
+
+脚本给出的是"骨架分"——**你要像一个真正的分析师一样审查每个重要评委的判断是否合理**：
+
+1. **审查 Top 5 Bull 和 Top 5 Bear** — 他们的 headline 有没有说服力？如果巴菲特给苹果打了低分但他实际持有，说明规则权重需要调整，你要在 commentary 里说明
+2. **审查 "skip" 名单** — 有多少人因为市场不匹配被跳过了？如果分析的是美股，23 个游资全部 skip 是正常的
+3. **用 sub-agent 做深度分析** — 对于 Top 3 看多和 Top 3 看空的投资者，你应该 **spawn sub-agent** 去 web search 他们对这只股票或这个行业的**真实公开发言**，看他们实际说过什么
+
+**Sub-agent 模板**（用 Agent tool）:
+```
+搜索 "{investor_name}" 对 "{stock_name}" 或 "{industry}" 的公开评价。
+来源：雪球 / 巴伦周刊 / 财新 / 证券时报 / 东方财富 / SEC 13F filing。
+告诉我：他实际持有过这只票吗？他对这个行业说过什么？
+```
+
+把搜索结果整合到 `panel.investors[x].comment` 和 `panel.investors[x].reasoning` 里，替换掉脚本生成的模板话术。
 
 **但跑完后你必须检查**：
 1. **有没有 0 分的异常**？ — 可能是 features 缺失导致的假阴性

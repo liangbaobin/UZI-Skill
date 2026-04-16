@@ -449,22 +449,14 @@ def generate_panel(dims_scored: dict, raw: dict) -> dict:
         verdict_obj = _evaluate_investor(inv_id, features)
 
         sig = verdict_obj["signal"]
-        score = int(verdict_obj["score"])
+        score = int(max(0, verdict_obj["score"]))
         confidence = int(verdict_obj["confidence"])
 
-        # 游资射程检查 — 强制过滤大资金不适合的小票
-        if inv["group"] == "F":
-            try:
-                mcap_raw = basic_ctx.get("market_cap", 0)
-                mcap_yi = float(str(mcap_raw).replace("亿", "")) if mcap_raw else 0
-            except (ValueError, TypeError):
-                mcap_yi = 0
-            style = inv.get("tier", "")
-            if style == "legend" and mcap_yi < 100:
-                sig = "neutral"
-                verdict = "不适合"
-            else:
-                verdict = _score_to_verdict(score, sig)
+        # Handle "skip" — investor won't look at this market
+        if sig == "skip":
+            verdict = "不适合"
+            score = 0
+            confidence = 0
         else:
             verdict = _score_to_verdict(score, sig)
 

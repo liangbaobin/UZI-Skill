@@ -336,6 +336,14 @@ def extract_features(raw: dict, dims: dict) -> dict:
     f["gross_margin_expanding"] = False  # default; could be computed from hist
     # Ticker passthrough
     f["ticker"] = raw.get("ticker", "") if raw else ""
+    # Market: infer from ticker suffix
+    ticker_str = f["ticker"]
+    if ticker_str.endswith(".SZ") or ticker_str.endswith(".SH"):
+        f["market"] = "A"
+    elif ticker_str.endswith(".HK"):
+        f["market"] = "HK"
+    else:
+        f["market"] = "US"
 
     return f
 

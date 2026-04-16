@@ -22,6 +22,7 @@ from __future__ import annotations
 from typing import Any
 
 from lib.investor_criteria import INVESTOR_RULES, Rule
+from lib.investor_knowledge import reality_check
 
 
 # ────────────────────────────────────────────────────────────────
@@ -64,11 +65,30 @@ def _safe_check(rule: Rule, features: dict) -> bool:
 
 
 def evaluate(investor_id: str, features: dict) -> dict:
-    """Evaluate one investor against one stock's features."""
+    """Evaluate one investor against one stock's features.
+
+    Three-layer evaluation:
+        Layer 1 · Reality check: market scope / known holdings / industry affinity
+        Layer 2 · Rule engine: quantitative criteria from investor_criteria.py
+        Layer 3 · Composite: merge rule score with reality adjustments
+    """
+    # ─── Layer 1: Reality Check ───
+    market = features.get("market", "A")
+    ticker = features.get("ticker", "")
+    name = features.get("name", "")
+    industry = features.get("industry", "")
+
+    rc = reality_check(investor_id, market, ticker, name, industry)
+
+    # If this investor wouldn't look at this market at all → "不适合"
+    if not rc["should_evaluate"]:
+        return _skip_result(investor_id, rc["skip_reason"] or "不在能力圈")
+
     rules: list[Rule] = INVESTOR_RULES.get(investor_id, [])
     if not rules:
         return _unknown_result(investor_id)
 
+    # ─── Layer 2: Rule Engine ───
     pass_list: list[dict] = []
     fail_list: list[dict] = []
     weight_pass = 0
@@ -92,22 +112,49 @@ def evaluate(investor_id: str, features: dict) -> dict:
                 "msg": _fmt_msg(rule.fail_msg or f"未达{rule.name}", features),
             })
 
-    # Score: weighted pass rate
-    score = round((weight_pass / weight_total) * 100, 1) if weight_total else 0.0
+    # Base score from rules
+    rule_score = round((weight_pass / weight_total) * 100, 1) if weight_total else 0.0
 
-    # Signal determination
-    if score >= BULLISH_THRESHOLD:
+    # ─── Layer 3: Reality Adjustment ───
+    affinity_adj = rc["affinity_adjust"]
+    holding_match = rc["holding_match"]
+
+    # If they actually HOLD this stock, that's a strong bullish signal
+    # regardless of what the rules say
+    if holding_match:
+        attitude, note = holding_match
+        if attitude in ("held", "bullish_known"):
+            # Add a virtual "pass" rule for the holding
+            pass_list.insert(0, {
+                "rule_id": "known_holding",
+                "name": "实际持仓 / 公开看好",
+                "weight": 6,  # highest weight — real money talks
+                "msg": f"📌 {note}",
+            })
+            weight_pass += 6
+            weight_total += 6
+
+    # Composite score = rule_score (re-calculated with holding) + affinity
+    if weight_total > 0:
+        score = round((weight_pass / weight_total) * 100 + affinity_adj, 1)
+    else:
+        score = round(50 + affinity_adj, 1)
+    score = max(0, min(100, score))
+
+    # Signal: if override from reality check (e.g. actual holding), respect it
+    if rc["override_signal"]:
+        signal = rc["override_signal"]
+    elif score >= BULLISH_THRESHOLD:
         signal = "bullish"
     elif score < BEARISH_THRESHOLD:
         signal = "bearish"
     else:
         signal = "neutral"
 
-    # Confidence — more rules = higher confidence; penalize tiny criteria sets
-    n_rules = len(rules)
-    base_conf = min(100, 50 + n_rules * 8)  # 2 rules → 66, 5 rules → 90, 7+ → 100
-    # pull confidence toward the score's extremeness
-    extremeness = abs(score - 50) * 0.6  # 0-30
+    # Confidence
+    n_rules = len(rules) + (1 if holding_match else 0)
+    base_conf = min(100, 50 + n_rules * 8)
+    extremeness = abs(score - 50) * 0.6
     confidence = round(min(100, base_conf * 0.6 + 40 + extremeness * 0.4), 0)
 
     # Sort rules by weight desc for display
@@ -168,6 +215,25 @@ def _build_rationale(signal: str, pass_list: list, fail_list: list) -> str:
     return "\n".join(lines) if lines else "无有效规则命中"
 
 
+def _skip_result(investor_id: str, reason: str) -> dict:
+    """This investor would not evaluate this stock (market/scope mismatch)."""
+    return {
+        "investor_id": investor_id,
+        "score": -1,
+        "signal": "skip",
+        "confidence": 0,
+        "weight_pass": 0,
+        "weight_total": 0,
+        "pass_count": 0,
+        "fail_count": 0,
+        "pass_rules": [],
+        "fail_rules": [],
+        "headline": f"不适合 — {reason}",
+        "rationale": f"该投资者{reason}，不对此股票发表意见。",
+        "skip_reason": reason,
+    }
+
+
 def _unknown_result(investor_id: str) -> dict:
     return {
         "investor_id": investor_id,
@@ -191,29 +257,42 @@ def evaluate_all(features: dict) -> dict[str, dict]:
 
 
 def panel_summary(results: dict[str, dict]) -> dict:
-    """Aggregate all investor verdicts into a consensus panel view."""
+    """Aggregate all investor verdicts into a consensus panel view.
+
+    Handles "skip" signal — investors who wouldn't look at this stock's market.
+    """
     if not results:
-        return {"bullish": 0, "bearish": 0, "neutral": 0, "avg_score": 50.0}
+        return {"bullish": 0, "bearish": 0, "neutral": 0, "skip": 0, "avg_score": 50.0}
 
-    bullish = sum(1 for r in results.values() if r["signal"] == "bullish")
-    bearish = sum(1 for r in results.values() if r["signal"] == "bearish")
-    neutral = sum(1 for r in results.values() if r["signal"] == "neutral")
-    avg_score = round(sum(r["score"] for r in results.values()) / len(results), 1)
-    avg_conf = round(sum(r["confidence"] for r in results.values()) / len(results), 0)
+    # Split active vs skipped
+    active = {k: v for k, v in results.items() if v["signal"] != "skip"}
+    skipped = {k: v for k, v in results.items() if v["signal"] == "skip"}
 
-    # Top 3 most bullish & most bearish (by score)
-    sorted_bull = sorted(results.items(), key=lambda kv: -kv[1]["score"])[:5]
-    sorted_bear = sorted(results.items(), key=lambda kv: kv[1]["score"])[:5]
+    bullish = sum(1 for r in active.values() if r["signal"] == "bullish")
+    bearish = sum(1 for r in active.values() if r["signal"] == "bearish")
+    neutral = sum(1 for r in active.values() if r["signal"] == "neutral")
 
+    active_scores = [r["score"] for r in active.values() if r["score"] >= 0]
+    avg_score = round(sum(active_scores) / len(active_scores), 1) if active_scores else 50.0
+    avg_conf = round(sum(r["confidence"] for r in active.values()) / max(len(active), 1), 0)
+
+    # Top bulls & bears from ACTIVE only
+    sorted_bull = sorted(active.items(), key=lambda kv: -kv[1]["score"])[:5]
+    sorted_bear = sorted(active.items(), key=lambda kv: kv[1]["score"])[:5]
+
+    n_active = len(active)
     return {
         "total": len(results),
+        "active": n_active,
+        "skip": len(skipped),
+        "skip_names": [v.get("skip_reason", "") for v in skipped.values()],
         "bullish": bullish,
         "bearish": bearish,
         "neutral": neutral,
         "avg_score": avg_score,
         "avg_confidence": avg_conf,
-        "bullish_pct": round(bullish / len(results) * 100, 0),
-        "bearish_pct": round(bearish / len(results) * 100, 0),
+        "bullish_pct": round(bullish / n_active * 100, 0) if n_active else 0,
+        "bearish_pct": round(bearish / n_active * 100, 0) if n_active else 0,
         "top_bulls": [{"id": k, "score": v["score"], "headline": v["headline"]} for k, v in sorted_bull],
         "top_bears": [{"id": k, "score": v["score"], "headline": v["headline"]} for k, v in sorted_bear],
     }
