@@ -1,5 +1,27 @@
 # Release Notes
 
+## v2.6.1 — 2026-04-17 (hotfix)
+
+> **追加论坛 bug · 直跑模式定性维度依然空** 修复
+
+### 用户报告
+跑完报告后发现 "宏观环境/政策/原材料/期货/事件" 5 维仍然空白。
+
+### 根因（3 串）
+1. `dim_commentary` 的 `dim_labels` 只覆盖 9/22 维，5 个定性维度直接 missing
+2. fallback commentary 是 "[脚本占位] 待 Claude 补充"——哪怕 raw_data 已有数据
+3. **`ddgs` 不在 requirements.txt** — 所有依赖 `lib/web_search` 的代码静默返回 0 结果（这是 v2.3 起的隐藏 bug）
+
+### 修复
+- `_auto_summarize_dim()` 覆盖全 22 维 · 把 raw_data 字段综合成 1-2 句中文摘要
+- `_autofill_qualitative_via_mx()` MX → ddgs 二级兜底 · 失败显式标记
+- `requirements.txt` 加 `ddgs>=9.0.0`
+
+### 实测（浙江东方 600120.SH）
+6/6 定性维度全有真实内容（5 维 ddgs 兜底 + 1 维原本有数据）。
+
+---
+
 ## v2.6.0 — 2026-04-17
 
 > **论坛 11 项 bug 综合修复 + Codex 测试发现的 5 个 PR#2 blocker**
