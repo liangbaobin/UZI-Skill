@@ -15,6 +15,14 @@ INDUSTRY_FUTURES: dict[str, tuple] = {
     "农业":   ("豆粕 M",    "M0"),
     "养殖业": ("生猪 LH",   "LH0"),
     "电池":   ("碳酸锂 LC", "LC0"),
+    # v2.8.4 · 补齐有色金属子类 —— 云铝等 coverage gap
+    "工业金属": ("沪铝 AL",  "AL0"),
+    "贵金属":   ("黄金 AU",  "AU0"),
+    "能源金属": ("碳酸锂 LC", "LC0"),
+    "小金属":   ("沪锡 SN",  "SN0"),
+    "煤炭开采": ("焦煤 JM",  "JM0"),
+    "焦炭":     ("焦炭 J",   "J0"),
+    "油气开采": ("原油 SC",  "SC0"),
     "光学光电子": (None, None),  # no direct linkage
     "半导体":  (None, None),
     "医药生物": (None, None),

@@ -1,5 +1,61 @@
 # Release Notes
 
+## v2.8.4 — 2026-04-17 (follow-up · 全库自审有色金属类 coverage gap)
+
+> **用户提醒"这些数据你都要自我检查一遍的，懂了吗？" 主动全库审计，补齐 v2.8.3 关联的 3 个 coverage gap**
+
+### 用户提醒
+> "所以这些数据你都要自我检查一遍的，懂了吗？"
+
+### 主动做了什么
+
+v2.8.3 修了 fetch_industry 的 BUG#R10，但用户提醒我不能只补用户报告的那一处。**主动全库审计**同类 pattern：
+
+| 审计 pattern | 结果 |
+|---|---|
+| `str.contains(X[:2])` fuzzy match | 8 处，1 处有风险已修 |
+| `iloc[0]` 盲选 | 20+ 处，多数是 ticker-specific 安全 |
+| `[:2] in X or X[:2] in k` 字典 fuzzy | 3 处在 materials/futures/peers 静默缺 coverage |
+| 我自己的 134 条 SW_TO_CSRC_INDUSTRY 硬映射 | 全部 134 条验证能命中 cninfo 真实数据 ✓ |
+| fetch_financials `_row("净利润")` 短关键字 | 有 `or _row("归属...")` fallback 先试，已有保护 |
+
+### 找到的 3 个 coverage gap（都是 v2.8.3 同一家族）
+
+| 位置 | 症状 | 修法 |
+|---|---|---|
+| `INDUSTRY_MATERIALS` | 云铝拿不到铝价联动（核心原材料数据空） | 加 `工业金属/有色金属/贵金属/能源金属/小金属/煤炭开采/焦炭/油气开采` 8 条 |
+| `INDUSTRY_FUTURES` | 云铝 `linked_contract` 为 None | 加 7 条 → `工业金属: (沪铝 AL, AL0)` 等 |
+| `_INDUSTRY_ALIASES` | 云铝 similar_stocks 完全空 | 加申万三级 → INDUSTRY_PEERS 别名 15 条 |
+
+### 修复前后云铝股份对比
+
+```
+v2.8.3 修后但 v2.8.4 修前:
+  7_industry  ✓ 有色金属冶炼和压延加工业 PE 32.97（BUG#R10 已修）
+  8_materials ✗ core_material = "—"（static 库无 "工业金属"）
+  9_futures   ✗ linked_contract = None
+  similar_stocks ✗ []  空
+
+v2.8.4 修后:
+  7_industry    ✓ 有色金属冶炼和压延加工业 PE 32.97
+  8_materials   ✓ 沪铝 +30% / 沪铜 +39.5% / 沪锌 +8.8% 真实 12 月趋势
+  9_futures     ✓ 沪铝 AL · 最新价 25520.0
+  similar_stocks ✓ 紫金矿业 / 洛阳钼业 / 天齐锂业
+```
+
+### 改动文件
+
+- `scripts/fetch_materials.py` · `INDUSTRY_MATERIALS` +8 条（工业金属/有色金属/贵金属/能源金属/小金属/煤炭开采/焦炭/油气开采）
+- `scripts/fetch_futures.py` · `INDUSTRY_FUTURES` +7 条
+- `scripts/fetch_similar_stocks.py` · `_INDUSTRY_ALIASES` +15 条
+- `scripts/tests/test_no_regressions.py` · +3 条测试
+
+### 回归
+
+**36/36** regression tests pass（新增 3 条：materials/futures/peers coverage 验证）
+
+---
+
 ## v2.8.3 — 2026-04-17 (critical fix · 行业分类碰撞错误)
 
 > **严重 bug 修复：云铝股份被归类为"农副食品加工"的根因，影响所有带"工业"/"加工"/"制造"前缀的申万行业**

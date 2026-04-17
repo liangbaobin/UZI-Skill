@@ -439,6 +439,35 @@ def test_fetch_industry_and_fetch_valuation_use_mapping():
             f"BUG#R10 regression: {fname} 仍有裸 contains(ind_name[:2])"
 
 
+# ─── v2.8.4 · BUG#R10-coverage · 有色金属类申万行业必须有 materials/futures/peers ──
+def test_metals_industries_have_materials_coverage():
+    """工业金属/贵金属/小金属/能源金属 在 INDUSTRY_MATERIALS 里必须有对应条目"""
+    from fetch_materials import INDUSTRY_MATERIALS
+    for ind in ("工业金属", "有色金属", "贵金属", "能源金属"):
+        assert ind in INDUSTRY_MATERIALS, f"BUG#R10-coverage: INDUSTRY_MATERIALS 缺 {ind!r}"
+        assert len(INDUSTRY_MATERIALS[ind]) >= 1
+
+
+def test_metals_industries_have_futures_coverage():
+    """工业金属/贵金属/能源金属 在 INDUSTRY_FUTURES 里必须有主连合约"""
+    from fetch_futures import INDUSTRY_FUTURES
+    for ind in ("工业金属", "贵金属", "能源金属"):
+        assert ind in INDUSTRY_FUTURES, f"BUG#R10-coverage: INDUSTRY_FUTURES 缺 {ind!r}"
+        name, code = INDUSTRY_FUTURES[ind]
+        assert name is not None and code is not None, f"{ind} 必须有主连合约非 None"
+
+
+def test_metals_industries_have_peers_alias():
+    """工业金属/贵金属/小金属/能源金属 必须在 _INDUSTRY_ALIASES 里映射到 '有色金属'"""
+    src = (SCRIPTS_DIR / "fetch_similar_stocks.py").read_text(encoding="utf-8")
+    alias_idx = src.find("_INDUSTRY_ALIASES = {")
+    end = src.find("}", alias_idx)
+    alias_block = src[alias_idx:end]
+    for ind in ("工业金属", "贵金属", "小金属", "能源金属", "稀有金属"):
+        assert f'"{ind}"' in alias_block, \
+            f"BUG#R10-coverage: _INDUSTRY_ALIASES 缺 {ind!r} → '有色金属' 映射"
+
+
 if __name__ == "__main__":
     # Manual runner — no pytest required
     import inspect
