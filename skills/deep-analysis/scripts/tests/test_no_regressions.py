@@ -724,6 +724,45 @@ def test_analysis_profile_env_compat():
     os.environ.pop("UZI_DEPTH", None)
 
 
+# ─── v2.10.2 · 代理/网络挂死的 4 层保护 ──
+def test_ddg_timeout_wrapper():
+    """v2.10.2 · DDGS 必须有硬 timeout（原先无，GFW 挂时卡 30-120s）"""
+    src = (SCRIPTS_DIR / "lib" / "web_search.py").read_text(encoding="utf-8")
+    assert "UZI_DDG_TIMEOUT" in src, "v2.10.2 regression: DDGS 缺 timeout env"
+    assert "concurrent.futures" in src or "_cf" in src, \
+        "v2.10.2 regression: DDGS 必须用线程池硬 kill，不能依赖 DDGS 内部 timeout"
+    # 必须有 timeout 错误返回
+    assert "ddgs: timeout" in src
+
+
+def test_net_timeout_guard_exists():
+    """v2.10.2 · net_timeout_guard 必须存在且 monkey-patch requests"""
+    p = SCRIPTS_DIR / "lib" / "net_timeout_guard.py"
+    assert p.exists(), "v2.10.2 regression: lib/net_timeout_guard.py 缺失"
+    src = p.read_text(encoding="utf-8")
+    assert "install_default_timeout" in src
+    assert "Session.request" in src, "必须 patch Session.request（覆盖所有 akshare 内部调用）"
+    assert "UZI_HTTP_TIMEOUT" in src
+
+
+def test_network_preflight_exists():
+    """v2.10.2 · 网络预检必须存在且覆盖核心域名"""
+    p = SCRIPTS_DIR / "lib" / "network_preflight.py"
+    assert p.exists()
+    src = p.read_text(encoding="utf-8")
+    for d in ("eastmoney", "duckduckgo", "cninfo", "xueqiu"):
+        assert d in src, f"预检必须覆盖 {d} 域名"
+
+
+def test_parse_ticker_hk_3digit():
+    """v2.10.2 · 3 位数字码（如 700/981）必须识别为 HK 不是 A 股"""
+    from lib.market_router import parse_ticker
+    for code in ("700", "981"):
+        r = parse_ticker(code)
+        assert r.market == "H", f"v2.10.2 regression: {code} 应识别为 HK，实际 {r.market}"
+        assert r.full == f"{code.zfill(5)}.HK"
+
+
 def test_prewarm_cache_script_exists():
     """v2.10.2 · prewarm 脚本存在且具有敏感性扫描"""
     p = SCRIPTS_DIR / "prewarm_cache.py"

@@ -1468,6 +1468,25 @@ def stage1(ticker: str) -> dict:
     """
     # v2.10.1 · 性能模式自动探测（解决 codex + 首次安装机器慢的问题）
     import os
+    # v2.10.2 · 全局 requests timeout 兜底（akshare 内部调用不会卡死）
+    try:
+        from lib import net_timeout_guard  # noqa: F401（import 副作用装 monkey-patch）
+    except Exception as _e:
+        print(f"  ⚠️ timeout guard load failed: {_e}")
+
+    # v2.10.2 · 网络预检（代理/GFW 挂了立即提示，不让 20 fetcher 挨个超时 30 分钟）
+    skip_preflight = os.environ.get("UZI_SKIP_PREFLIGHT") == "1"
+    if not skip_preflight:
+        try:
+            from lib.network_preflight import run_preflight
+            pre = run_preflight(verbose=True, timeout=3.0)
+            # 3 个以上不通 → 强制 lite
+            if pre["critical_failures"] >= 3 and os.environ.get("UZI_LITE") != "0":
+                os.environ["UZI_LITE"] = "1"
+                print(f"   ⚡ 网络严重受限，自动切 lite 模式防止挂太久\n")
+        except Exception as _e:
+            print(f"  ⚠️ preflight failed (非致命): {_e}")
+
     is_lite, lite_reason = _detect_lite_mode()
     if is_lite:
         os.environ["UZI_LITE"] = "1"  # 下游 fetcher 能读

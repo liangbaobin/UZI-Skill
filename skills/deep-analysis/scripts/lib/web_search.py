@@ -110,16 +110,25 @@ def trusted_domains_for(dim_key: str) -> tuple[str, ...]:
 
 
 def _ddg_search(query: str, max_results: int = 10, region: str = "cn-zh") -> list[dict]:
+    """v2.10.2 · 加硬超时保护（代理/GFW 挂时卡 60s+ 的核心原因）."""
     if not _DDGS_OK:
         return []
-    try:
+    # 用独立线程 + 硬超时把 DDGS 内部无 timeout 的 requests 兜住
+    # UZI_DDG_TIMEOUT 可调（默认 10 秒）
+    import os, concurrent.futures as _cf
+    timeout_sec = int(os.environ.get("UZI_DDG_TIMEOUT", "10"))
+
+    def _inner():
         with DDGS() as d:
-            results = list(d.text(
-                query,
-                region=region,
-                safesearch="off",
-                max_results=max_results,
+            return list(d.text(
+                query, region=region, safesearch="off", max_results=max_results,
             ))
+    try:
+        with _cf.ThreadPoolExecutor(max_workers=1) as pool:
+            try:
+                results = pool.submit(_inner).result(timeout=timeout_sec)
+            except _cf.TimeoutError:
+                return [{"error": f"ddgs: timeout > {timeout_sec}s（代理/网络不通？）"}]
         # Normalize fields
         return [
             {
