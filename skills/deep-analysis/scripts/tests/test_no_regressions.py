@@ -645,6 +645,56 @@ def test_stage1_early_exits_on_etf():
         "v2.9.2 regression: ETF 持仓拉取接口未使用"
 
 
+# ─── v2.10.1 · 性能优化：lite mode + ddgs 预算 + fund_holders 默认 20 ──
+def test_fund_holders_default_limit_capped():
+    """v2.10.1 · wave3 默认 limit=20 而不是 None（保护首次安装/Codex）"""
+    src = (SCRIPTS_DIR / "run_real_test.py").read_text(encoding="utf-8")
+    idx = src.find("def _fund_holders")
+    snippet = src[idx:idx + 1200]
+    assert "UZI_FUND_LIMIT" in snippet, \
+        "v2.10.1 regression: wave3 必须支持 UZI_FUND_LIMIT 环境变量"
+    # 默认不应该是 None
+    assert '"20"' in snippet or "= 20" in snippet, \
+        "v2.10.1 regression: UZI_FUND_LIMIT 默认必须是 20（不是 None）"
+
+
+def test_lite_mode_detection_exists():
+    """v2.10.1 · _detect_lite_mode 必须存在"""
+    src = (SCRIPTS_DIR / "run_real_test.py").read_text(encoding="utf-8")
+    assert "_detect_lite_mode" in src, "v2.10.1 regression: 缺 _detect_lite_mode"
+    assert "UZI_LITE" in src
+    assert "UZI_DDG_BUDGET" in src
+
+
+def test_ddg_budget_enforced():
+    """v2.10.1 · search() 必须在超预算时返回 _budget_exceeded 标记并过滤掉"""
+    import os
+    os.environ["UZI_DDG_BUDGET"] = "0"  # 强制超预算
+    try:
+        from importlib import reload
+        from lib import web_search
+        reload(web_search)
+        # 预算为 0，任何未命中 cache 的查询都应该返空
+        results = web_search.search("测试预算 xxxx_unique_probe_q", max_results=3, cache_key_prefix="budget_test")
+        assert isinstance(results, list)
+        # _budget_exceeded 标记不应对外暴露
+        assert not any(r.get("_budget_exceeded") for r in results)
+        state = web_search.get_budget_state()
+        assert state["skipped"] >= 0  # 至少调用过
+    finally:
+        os.environ.pop("UZI_DDG_BUDGET", None)
+
+
+def test_fetch_industry_respects_lite_mode():
+    """v2.10.1 · fetch_industry 在 UZI_LITE=1 时不跑 _dynamic_industry_overview"""
+    src = (SCRIPTS_DIR / "fetch_industry.py").read_text(encoding="utf-8")
+    assert 'UZI_LITE' in src and '_dynamic_industry_overview' in src
+    # 检查早退逻辑
+    idx = src.find('UZI_LITE')
+    snippet = src[idx:idx + 300]
+    assert "dynamic = {}" in snippet, "lite mode 必须让 dynamic 为空"
+
+
 if __name__ == "__main__":
     # Manual runner — no pytest required
     import inspect

@@ -265,10 +265,14 @@ def collect_raw_data(ticker: str, max_workers: int = 6, resume: bool = True) -> 
     def _fund_holders():
         try:
             import fetch_fund_holders
-            # BUG#R2 fix: v2.4 已把 fetcher limit 改为 None（不截断），但 wave3 调用
-            # 还是写死 limit=6 → 报告里只显示 6 个基金。这次同步移除调用层的截断。
-            # 茅台 649 家、浙江东方 80 家全收录；render_fund_managers 已支持紧凑行展开。
-            fh = fetch_fund_holders.main(ticker, limit=None)
+            # v2.10.1 · 性能优化：默认 limit=20（茅台级大票原先 649 家逐家 akshare
+            # 查询需要 5-10 分钟，对 codex + 首次安装机器是主要耗时瓶颈）。
+            # 大多数分析场景前 20 大基金持仓已能反映机构偏好；需要全量可设
+            # UZI_FUND_LIMIT=all 或 UZI_FUND_LIMIT=<N> 覆盖。
+            import os
+            fl = os.environ.get("UZI_FUND_LIMIT", "20")
+            limit = None if fl in ("all", "none", "None", "0") else int(fl)
+            fh = fetch_fund_holders.main(ticker, limit=limit)
             return ("fund_managers", (fh.get("data") or {}).get("fund_managers", []), None)
         except Exception as e:
             return ("fund_managers", [], str(e))
@@ -1409,6 +1413,40 @@ def generate_synthesis(raw: dict, dims_scored: dict, panel: dict, agent_analysis
     }
 
 
+def _detect_lite_mode() -> tuple[bool, str]:
+    """v2.10.1 · 三种方式决定是否进 lite mode:
+
+    1. UZI_LITE=1 env（显式）
+    2. UZI_LITE=auto 或未设置 → 自动检测首次安装（.cache/_global 为空）
+    3. UZI_LITE=0 → 强制关闭
+
+    Lite mode 影响:
+      - fetch_macro / fetch_policy / fetch_moat 跳过 ddgs（返空让 agent 知道）
+      - fetch_industry 跳过 _dynamic_industry_overview（省 3-9 次 ddgs）
+      - wave3 fund_managers 不改（已有 UZI_FUND_LIMIT 控制）
+      - HTML 报告正常生成，但会显示"⚡ LITE MODE 跑完后可去 LITE=0 补数据"
+
+    返回 (is_lite: bool, reason: str)
+    """
+    import os
+    from pathlib import Path
+    val = os.environ.get("UZI_LITE", "auto").lower()
+    if val in ("1", "true", "yes", "on"):
+        return True, "UZI_LITE=1 显式启用"
+    if val in ("0", "false", "no", "off"):
+        return False, "UZI_LITE=0 显式关闭"
+    # auto 模式：检测 _global api_cache 是否为空（首次安装判定）
+    global_cache = Path(".cache/_global/api_cache")
+    if not global_cache.exists():
+        return True, "首次安装（.cache/_global 不存在）自动 lite"
+    try:
+        if len(list(global_cache.iterdir())) < 5:
+            return True, "cache 非常冷（_global/api_cache 条目 < 5）自动 lite"
+    except Exception:
+        pass
+    return False, "cache 已预热，full mode"
+
+
 def stage1(ticker: str) -> dict:
     """Stage 1: 数据采集 + 建模 + 规则引擎骨架分。
 
@@ -1416,6 +1454,18 @@ def stage1(ticker: str) -> dict:
     Claude 应该在 stage1 之后介入，用 sub-agent 逐组分析 51 评委，
     覆盖 panel.json 中的 headline/reasoning/score，然后调 stage2 生成报告。
     """
+    # v2.10.1 · 性能模式自动探测（解决 codex + 首次安装机器慢的问题）
+    import os
+    is_lite, lite_reason = _detect_lite_mode()
+    if is_lite:
+        os.environ["UZI_LITE"] = "1"  # 下游 fetcher 能读
+        os.environ.setdefault("UZI_DDG_BUDGET", "15")  # 全局 ddgs 预算上限
+        print(f"\n⚡ LITE MODE: {lite_reason}")
+        print(f"   · 跳过 fetch_macro/policy/moat 的 ddgs 查询（返回空让 agent 自己补）")
+        print(f"   · fetch_industry 跳过动态景气度查询（省 3-9 次 ddgs）")
+        print(f"   · wave3 fund_holders 默认 top 20（UZI_FUND_LIMIT=all 可覆盖）")
+        print(f"   · 全局 ddgs 预算 15 次/ticker（超出自动 skip）")
+        print(f"   · 完整跑请 UZI_LITE=0 && python run.py <ticker>\n")
     # v2.3 · 中文名解析 — 支持纠错提示。若输入无法明确解析，早退并返回候选，不继续跑 22 fetcher。
     from lib.market_router import is_chinese_name
     ti = None
