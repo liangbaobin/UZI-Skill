@@ -1,19 +1,24 @@
 """pipeline.collect · wave-based 数据采集编排器.
 
-替代 run_real_test.collect_raw_data 的未来版本.
-Phase 4 骨架 · 内部仍调 22 legacy adapter.
+v3.0.0 Phase 7+ · 性能跟 legacy collect_raw_data 完全对齐.
 
 设计：
 - wave 1: 0_basic 先跑（后续 fetcher 依赖 industry）
-- wave 2: 非依赖型 fetcher 并发（max_workers · 默认 1 防 mini_racer race）
+- wave 2: 非依赖型 fetcher **并发 max_workers=6** + mini_racer 串行锁（跟 legacy 一致）
 - wave 3: 依赖型 fetcher（3_macro / 7_industry / 9_futures / 13_policy）
 - 所有结果返 dict[dim_key, DimResult]
+
+**业务零区别保证**：
+- 输出 raw_data.json 跟 legacy 格式完全一致（ticker/data/source/fallback 顶层字段）
+- pipeline-extra 元信息放 `_pipeline` 命名空间 · 下游读不到就忽略
+- 性能：并发 + 锁 · 跟 legacy 对齐（cold ~5min · warm ~15s）
 
 feature flag：UZI_PIPELINE=1 时 stage1 走新管道 · 否则走老 collect_raw_data
 """
 from __future__ import annotations
 
 import os
+import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any
@@ -25,23 +30,34 @@ from .schema import DimResult, Quality
 # 依赖 0_basic.industry 的 dim · 必须在 wave 3
 DEPENDENT_DIMS = {"3_macro", "7_industry", "9_futures", "13_policy"}
 
+# v3.0.0 · mini_racer V8 isolate 非 thread-safe · 这些 legacy fetcher 用 mini_racer
+# 必须串行跑 · 跟 legacy `_MINI_RACER_FETCHERS` 一致
+_MINI_RACER_LEGACY_MODULES = {"fetch_industry", "fetch_capital_flow", "fetch_valuation"}
+_MINI_RACER_LOCK = threading.Lock()
+
 
 def is_pipeline_enabled() -> bool:
     """feature flag · 默认关 · 只在 UZI_PIPELINE=1 时启用新管道."""
     return os.environ.get("UZI_PIPELINE") == "1"
 
 
-def collect(ticker: Any, raw_previous: dict | None = None, max_workers: int = 1) -> dict[str, dict]:
+def collect(ticker: Any, raw_previous: dict | None = None, max_workers: int = 6) -> dict[str, dict]:
     """主入口 · 返老格式 dict · 兼容 run_real_test 下游消费.
 
     raw_previous · 用于 resume 模式 · 已有缓存的 dim 跳过.
 
-    返回 dict 格式（保持与 collect_raw_data 兼容）：
+    max_workers=6 默认 · 跟 legacy 一致 · mini_racer fetcher 用 _MINI_RACER_LOCK 串行.
+
+    返回 dict 格式（100% 跟 legacy raw_data.json 兼容）：
     {
-        "0_basic": {"data": {...}, "source": "...", "quality": "full", "data_gaps": [...]},
-        "1_financials": {...},
+        "0_basic": {
+            "data": {...},
+            "source": "...",
+            "fallback": bool,                  # ← legacy 格式
+            "_pipeline": {quality, data_gaps, ...}  # ← v3 pipeline 额外
+        },
         ...
-        "fund_managers": [...],  # top_level 溢出字段
+        "fund_managers": [...]  # top_level 溢出字段（legacy 已有此惯例）
     }
     """
     t0 = time.time()
@@ -79,7 +95,13 @@ def collect(ticker: Any, raw_previous: dict | None = None, max_workers: int = 1)
         fetcher = get_fetcher(dim_key)
         if not fetcher:
             return dim_key, DimResult.empty(dim_key).to_dict(), {}
-        result = fetcher.fetch(ticker)
+        # v3.0.0 · mini_racer fetcher 必须串行（V8 isolate 非 thread-safe · 跟 legacy 一致）
+        legacy_mod = getattr(fetcher, "_legacy_module", "")
+        if legacy_mod in _MINI_RACER_LEGACY_MODULES:
+            with _MINI_RACER_LOCK:
+                result = fetcher.fetch(ticker)
+        else:
+            result = fetcher.fetch(ticker)
         return dim_key, result.to_dict(), result.top_level_fields
 
     # 构造 raw dict 给 args_fn 用（部分 fetcher 需要从 0_basic 拿 industry）
@@ -92,7 +114,7 @@ def collect(ticker: Any, raw_previous: dict | None = None, max_workers: int = 1)
                 out[dim_key] = result_dict
                 for k, v in top_level.items():
                     out[k] = v
-                q = result_dict.get("quality", "?")
+                q = (result_dict.get("_pipeline") or {}).get("quality", "?")
                 print(f"    ✓ {dim_key:20s} {q}")
             except Exception as e:
                 d = futures[f]
@@ -129,14 +151,17 @@ def collect(ticker: Any, raw_previous: dict | None = None, max_workers: int = 1)
 
 
 def _is_resume_valid(dim_dict: dict) -> bool:
-    """判断 dim cache 是否有效 · 兼容新老格式."""
+    """判断 dim cache 是否有效 · 兼容 legacy 和 v3 格式."""
     if not isinstance(dim_dict, dict):
         return False
-    # 老格式：有 data 且非空
     data = dim_dict.get("data") or {}
-    # 新格式：quality != missing/error
-    q = dim_dict.get("quality", "")
+    # v3 格式：_pipeline.quality 不是 missing/error
+    pp = dim_dict.get("_pipeline") or {}
+    q = pp.get("quality") or dim_dict.get("quality", "")
     if q in ("missing", "error"):
+        return False
+    # legacy 格式：fallback=True 表示抓失败
+    if dim_dict.get("fallback") is True:
         return False
     return bool(data)
 

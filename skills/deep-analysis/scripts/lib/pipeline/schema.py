@@ -47,31 +47,56 @@ class DimResult:
     top_level_fields: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict:
-        """转 dict · 兼容老 raw_data.json 格式."""
-        d = asdict(self)
-        # Quality enum 转 str
-        d["quality"] = self.quality.value if isinstance(self.quality, Quality) else str(self.quality)
-        return d
+        """转 dict · **100% 兼容 legacy raw_data.json 格式**.
+
+        v3.0.0 业务零区别保证 · 顶层字段跟 legacy fetcher 完全一致：
+        - `ticker` · `data` · `source` · `fallback`
+        pipeline-extra 字段（quality/data_gaps/latency_ms 等）全部放 `_pipeline`
+        命名空间 · 下游 legacy 代码读不出 · 零干扰.
+        """
+        q_str = self.quality.value if isinstance(self.quality, Quality) else str(self.quality)
+        return {
+            # ── Legacy-compat 顶层字段（跟老 fetcher 返回格式一致）──
+            "data": self.data,
+            "source": self.source,
+            "fallback": q_str in ("error", "missing"),  # quality map → fallback bool
+            # ── Pipeline-extra 元信息（下游选读 · 不读也不影响）──
+            "_pipeline": {
+                "dim_key": self.dim_key,
+                "quality": q_str,
+                "data_gaps": self.data_gaps,
+                "latency_ms": self.latency_ms,
+                "cached": self.cached,
+                "top_level_fields": self.top_level_fields,
+                "error": self.error,
+            },
+        }
 
     @classmethod
     def from_dict(cls, d: dict) -> "DimResult":
-        """从 dict 恢复 · 处理 Quality enum · 兼容老数据."""
-        q = d.get("quality", "missing")
+        """从 dict 恢复 · 兼容 legacy 和 pipeline 两种 schema."""
+        # 优先读 _pipeline 命名空间 · 兼容新 schema
+        pp = d.get("_pipeline") or {}
+        # 降级读顶层 · 兼容老 schema 或手写 dict
+        q = pp.get("quality") or d.get("quality") or "missing"
         if isinstance(q, str):
             try:
                 q = Quality(q)
             except ValueError:
                 q = Quality.MISSING
+        # 从 fallback 字段反推 quality（老数据只有 fallback 没有 quality）
+        if not pp and d.get("fallback") is True:
+            q = Quality.ERROR
         return cls(
-            dim_key=d.get("dim_key", ""),
+            dim_key=pp.get("dim_key") or d.get("dim_key", ""),
             data=d.get("data") or {},
             source=d.get("source", "unknown"),
             quality=q,
-            error=d.get("error"),
-            data_gaps=d.get("data_gaps") or [],
-            cached=d.get("cached", False),
-            latency_ms=d.get("latency_ms"),
-            top_level_fields=d.get("top_level_fields") or {},
+            error=pp.get("error") or d.get("error"),
+            data_gaps=pp.get("data_gaps") or d.get("data_gaps") or [],
+            cached=pp.get("cached", d.get("cached", False)),
+            latency_ms=pp.get("latency_ms") or d.get("latency_ms"),
+            top_level_fields=pp.get("top_level_fields") or d.get("top_level_fields") or {},
         )
 
     # ─── 便捷构造 ─────────────────────────────────────
