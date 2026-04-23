@@ -1,5 +1,72 @@
 # Release Notes
 
+## v3.1.0 — 2026-04-23 (run_real_test.py 深度瘦身 · rrt -65%)
+
+> **用户反馈**："开始 · 直接全部开始做吧"（请求 v3.1/v3.2/v3.3 继续重构）
+
+### 改动概览
+
+`run_real_test.py` 从 **2105 行 → 735 行**（-65%）· 业务零差异.
+
+### 搬迁 1 · 纯函数 → `lib/pipeline/score_fns.py` (-1228 行)
+
+从 rrt 搬：
+- `_f` · `score_dimensions` · `generate_panel` · `generate_synthesis`
+- `_auto_summarize_dim` · `_autofill_qualitative_via_mx` · `_extract_mx_text`
+- `_is_junk_autofill` · `_AUTOFILL_JUNK_PATTERNS` (v2.12.1)
+
+rrt 保留 re-export · 向后兼容 `rrt.score_dimensions(...)` 等调用.
+
+### 搬迁 2 · preflight/resolve/ETF → `lib/pipeline/preflight_helpers.py` (-166 行)
+
+从 rrt.stage1 开头搬：
+- 网络 preflight (GFW / 代理探测) · 失败自动 lite
+- 中文名解析 · 候选早退
+- ETF/LOF/可转债识别 · 持仓建议早退
+
+stage1 新入口：
+```python
+_pt = prepare_target(ticker, detect_lite_fn=_detect_lite_mode)
+if not _pt["ok"]:
+    return _pt["payload"]
+ti = _pt["ticker_info"]
+```
+
+### 性能
+
+| 场景 | v3.0 | v3.1 |
+|---|---|---|
+| 002217 resume e2e | 46.9s | **10.0s** |
+| pipeline.score | 10.6s | 0.1s |
+
+注：性能提升主要来自 v3.0 的 pipeline.score 解耦（v3.1 继承），代码组织更清晰是锦上添花.
+
+### 回归测试
+
+- 332 tests 全过
+- 字符串 grep 式 test 扩展为读 rrt + score_fns + preflight_helpers 三文件
+- 真机 e2e 002217 resume → 608KB HTML 报告 · 格式/数据与 v3.0 一致
+
+### 当前 rrt.py 结构（735 行）
+
+| 段 | 行数 | 状态 |
+|---|---|---|
+| Header + imports + FETCHER_MAP | 72 | 稳定 |
+| `collect_raw_data` (legacy collector) | 283 | ⚠️ 仍在 · 被 pipeline/collect 取代中 |
+| score_fns re-export | 12 | ✅ v3.1 |
+| `_detect_lite_mode` | 34 | 稳定 |
+| `stage1` | 160 | ✅ v3.1 瘦身 |
+| `stage2` | 149 | 稳定 |
+| `main` (CLI) | 25 | 稳定 |
+
+### 剩余重构（后续 v3.1.x / v3.2 系列）
+
+- **v3.1.1** · 22 fetcher adapter 内化 legacy 逻辑 · 删 `fetch_X.py` 冗余（~5-8h）
+- **v3.2.0** · `renderer/` 21 个 stub 升级为 `assemble_report.py` 的完整实现 · assemble_report 改 import renderer/ · 瘦身到 < 800 行（~3-5h）
+- **v3.3.0** · `collect_raw_data` 标 deprecated · legacy stage1 改调 pipeline.collect · rrt 进一步到 < 500 行
+
+---
+
 ## v3.0.0 — 2026-04-23 (pipeline 架构为主干 · 默认启用)
 
 > **用户反馈**："直接重构到 3.0 吧 · 按你推荐的来"

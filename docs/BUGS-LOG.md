@@ -7,6 +7,27 @@
 
 ---
 
+## v3.1.0 (2026-04-23 · rrt 瘦身 65% · 纯函数 + preflight 抽离)
+
+### REFACTOR · run_real_test.py 从 2105 → 735 行
+- **症状**：v2.x 连续 5 个 hotfix 都落在 rrt 屎山里 · 函数互相耦合 · 改动困难
+- **位置**：`run_real_test.py` · `lib/pipeline/score_fns.py`（新）· `lib/pipeline/preflight_helpers.py`（新）
+- **根因**：rrt 同时承担 collect + scoring 纯函数 + stage1/stage2 CLI 编排 · 职责混杂 · 2105 行单文件
+- **影响**：改任何一处需要扫全文件找依赖 · 测试 grep 式脆弱 · v3.0 发完仍有这个债
+- **修法**（2 步物理搬迁）：
+  1. 搬 1228 行纯函数到 `score_fns.py` · rrt 做 re-export 保持兼容
+  2. 搬 166 行 preflight/resolve/ETF 到 `preflight_helpers.py` · stage1 改调 `prepare_target()`
+- **验证**：332 tests 全过 · 002217 resume e2e 10s 出报告 · 格式 100% 兼容
+- **回归测试**：18 处 grep 式测试批量 patch 读 rrt + score_fns + preflight_helpers 三文件拼接
+- **未来改该区域注意事项**：
+  - 纯函数的 canonical 位置现在是 `score_fns.py` · rrt 只做 re-export · 新函数添加走 score_fns
+  - preflight 任何新增检查都加到 `prepare_target()` · 不要回到 stage1 里堆逻辑
+  - `collect_raw_data` 仍在 rrt（283 行）· legacy stage1 还用它 · 新 collector 是 `pipeline/collect.py`
+  - 如果 stage1 签名变化（加/减参数）· 需同步 `preflight_helpers.prepare_target` 参数
+  - grep 式测试（`(X / "run_real_test.py").read_text()`）脆弱 · 如果再搬函数记得扩展测试的文件列表
+
+---
+
 ## v3.0.0 (2026-04-23 · pipeline 架构默认启用 + Phase 6c 解耦)
 
 ### REFACTOR · pipeline 成为主干 · legacy 转作 fallback
