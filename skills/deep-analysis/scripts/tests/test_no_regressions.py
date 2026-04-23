@@ -638,8 +638,12 @@ def test_fetch_basic_rejects_etf():
 
 def test_stage1_early_exits_on_etf():
     """v2.9.2 · run_real_test.stage1 必须在 ETF ticker 时早期 return，
-    不跑 22 维 fetcher 浪费时间"""
-    src = (((SCRIPTS_DIR / "run_real_test.py").read_text(encoding="utf-8")) + "\n" + (SCRIPTS_DIR / "lib" / "pipeline" / "score_fns.py").read_text(encoding="utf-8"))
+    不跑 22 维 fetcher 浪费时间（v3.1 · ETF 检测代码在 preflight_helpers.py）"""
+    src = (
+        (SCRIPTS_DIR / "run_real_test.py").read_text(encoding="utf-8")
+        + "\n" + (SCRIPTS_DIR / "lib" / "pipeline" / "score_fns.py").read_text(encoding="utf-8")
+        + "\n" + (SCRIPTS_DIR / "lib" / "pipeline" / "preflight_helpers.py").read_text(encoding="utf-8")
+    )
     assert "non_stock_security" in src, \
         "v2.9.2 regression: stage1 缺 non_stock_security 早退逻辑"
     assert "top_holdings" in src, \
@@ -667,8 +671,12 @@ def test_fund_holders_two_tier_strategy():
 
 
 def test_lite_mode_detection_exists():
-    """v2.10.1 · _detect_lite_mode 必须存在"""
-    src = (((SCRIPTS_DIR / "run_real_test.py").read_text(encoding="utf-8")) + "\n" + (SCRIPTS_DIR / "lib" / "pipeline" / "score_fns.py").read_text(encoding="utf-8"))
+    """v2.10.1 · _detect_lite_mode 必须存在（v3.1 · UZI_LITE / UZI_DDG_BUDGET 在 preflight_helpers）"""
+    src = (
+        (SCRIPTS_DIR / "run_real_test.py").read_text(encoding="utf-8")
+        + "\n" + (SCRIPTS_DIR / "lib" / "pipeline" / "score_fns.py").read_text(encoding="utf-8")
+        + "\n" + (SCRIPTS_DIR / "lib" / "pipeline" / "preflight_helpers.py").read_text(encoding="utf-8")
+    )
     assert "_detect_lite_mode" in src, "v2.10.1 regression: 缺 _detect_lite_mode"
     assert "UZI_LITE" in src
     assert "UZI_DDG_BUDGET" in src
