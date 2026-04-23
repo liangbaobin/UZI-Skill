@@ -1,5 +1,116 @@
 # Release Notes
 
+## v2.15.5 — 2026-04-23 (评分公式重校准 · 混合公式 + 极化拉伸)
+
+> **用户反馈**："现在评分大多数都在一个区间内徘徊，你看看是什么问题，是否需要优化"
+
+### 诊断（采 7 股 · 331 个非 skip 打分）
+
+- 单 investor score: mean=43.7, stdev=30.3, range 0-100（分布其实很宽）
+- 但 `panel_consensus` 聚集在 40-55 区间 · 7 流派内分歧 stdev 往往 <15
+- **根因 1**：v2.11 公式 `(bullish + 0.6*neutral)/active*100` 只看 signal 计数 · 把连续 score 压成 3 分类（65/35 阈值）· 丢失"程度"信息
+- **根因 2**：价值/成长派规则严苛 · 平均 score 35 左右 · 比技术/量化派低 20 分 · 结构性居中
+
+### 修法 · 混合公式 + 极化拉伸
+
+```python
+# Step 1 · 混合连续分 + 离散票
+score_mean    = mean(score for active)           # 0-100 连续 · 反映强度
+vote_weighted = (bullish + 0.6*neutral)/active*100  # 原 v2.11 · 保留投票机制
+raw           = 0.65 * score_mean + 0.35 * vote_weighted
+
+# Step 2 · 极化拉伸（50 为中心，k=1.3）· 让两端更极端
+final = clip(50 + (raw - 50) * 1.3, 0, 100)
+```
+
+**效果对比（7 股样本）**：
+
+| 指标 | v2.11 公式 | v2.15.5 公式 |
+|---|---|---|
+| 总盘 consensus mean | 46.9 | 42.2 |
+| 总盘 consensus range | 16.5-77.9 | 8.4-76.8 |
+| 强势 300308 | 77.9 | 76.8（持平） |
+| 弱势 600120 | 16.5 | 8.4（更弱）|
+| 002217 F 游资 | 51.0 关注 | 43.7 谨慎（修正高估）|
+| 002217 G 量化 | 50.0 关注 | 59.3 关注（修正低估）|
+
+**002217 (中密控股) v2.15.5 分布**：
+
+| 流派 | consensus | 实分均值 | 投票共识 | verdict |
+|---|---|---|---|---|
+| 经典价值派 | 34.7 | 37.3 | 40.0 | 回避 |
+| 成长派 | 27.2 | 36.5 | 25.0 | 回避 |
+| 宏观派 | **67.3** | 60.8 | 68.0 | **买入** |
+| 技术派 | 38.1 | 41.2 | 40.0 | 谨慎 |
+| 中式价投 | 29.5 | 36.5 | 30.0 | 回避 |
+| A 股游资 | 43.7 | 42.0 | 51.0 | 谨慎 |
+| 量化派 | 59.3 | 61.0 | 50.0 | 关注 |
+
+结论清晰：**宏观有利但基本面乏力**. 以前"F 游资 51 关注"被 neutral 投票机制高估 · 实分 42 说明大家其实都是"不看好但也不讨厌"的 40 分心态 · 新公式修正了.
+
+### 改动
+
+- `run_real_test.py::generate_panel` · 引入 `SCORE_WEIGHT=0.65 / VOTE_WEIGHT=0.35 / POLARIZE_K=1.30` 常量 · 加 `_polarize()` helper · 总盘 + school_scores 同步升级
+- `panel.school_scores[g]` 新增 `score_mean` / `vote_consensus` 两个分量字段 · `consensus` 为极化后最终值
+- `consensus_formula` 诊断 dict 新增 `score_weight` / `vote_weight` / `polarize_k` / `score_mean` / `vote_weighted` / `consensus_raw` / `consensus_final`
+- `assemble_report.py::render_school_scores` 卡片下方显示"流派分 X.X · 实分均值 · 投票共识" · hover tip 带全分量
+- `lib/self_review.py::check_consensus_formula_sanity` 版本校验放宽 · 支持 v2.9.1 / v2.11 / v2.15.5
+
+### 回归测试
+
+- `tests/test_v2_15_4_school_scores.py` 升级为 9 tests · 含混合公式数学 + 极化边界 + 分量字段 · 全过 ✅
+- `tests/test_v2_11_scoring_calibration.py::test_consensus_formula_version_label_v2_11` 更新接受 v2.15.5
+- 总套件 253 tests 全过
+
+---
+
+## v2.15.4 — 2026-04-22 (按流派打分 · 7 大学派各自评分)
+
+> **用户反馈**："打分系统我觉得可能还要优化一下，我们现在有几个流派，那么除了有一个最终分数，还要有不同流派各自给出的分数"
+
+### 新功能 · 按流派评分 (school_scores)
+
+以前 `panel.json` 只有一个 `panel_consensus` 总分 · 51 位评委的分歧被聚合掉看不出来. v2.15.4 起每一次跑都会产出 **7 大流派各自的 consensus / avg_score / verdict**:
+
+| 流派 | 代表人物 | 成员数 |
+|---|---|---|
+| A 经典价值派 | 巴菲特 / 格雷厄姆 / 费雪 / 芒格 | 6 |
+| B 成长派 | 彼得林奇 / 欧奈尔 / 蒂尔 / 伍德 | 4 |
+| C 宏观派 | 索罗斯 / 达里奥 / 马克斯 | 5 |
+| D 技术派 | 利弗莫尔 / Minervini / 达瓦斯 | 4 |
+| E 中式价投 | 段永平 / 张坤 / 朱少醒 / 冯柳 | 6 |
+| F A 股游资 | 章盟主 / 孙哥 / 赵老哥…… | 23 |
+| G 量化派 | Simons / Thorp / Shaw | 3 |
+
+**实测示例（002217 · 中密控股）**：
+
+| 流派 | 共识度 | 均分 | 判定 | 信号分布 |
+|---|---|---|---|---|
+| 经典价值派 | 40.0 | 37.3 | 谨慎 | 0📈 4⚖️ 2📉 |
+| 成长派 | 25.0 | 36.5 | 回避 | 1📈 0⚖️ 3📉 |
+| **宏观派** | **68.0** | 60.8 | **买入** | 1📈 4⚖️ 0📉 |
+| 技术派 | 40.0 | 41.2 | 谨慎 | 1📈 1⚖️ 2📉 |
+| 中式价投 | 30.0 | 36.5 | 回避 | 0📈 3⚖️ 3📉 |
+| A 股游资 | 51.0 | 42.0 | 关注 | 0📈 17⚖️ 3📉 |
+| 量化派 | 50.0 | 61.0 | 关注 | 1📈 0⚖️ 1📉 |
+
+一眼可见：**宏观派买入 vs 成长派回避**分歧 43 分 · 说明这只票属"宏观友好但成长性不足"的结构性矛盾票 · 以前只看总分 45.5 "谨慎"看不出来.
+
+### 实现
+
+- `run_real_test.py::generate_panel` 末尾新增 `school_scores` dict · 每个流派用和总盘一致的 `(bullish + 0.6*neutral)/active * 100` 公式
+- `_consensus_to_verdict` 阈值与综合分保持对齐（80 重仓 / 65 买入 / 50 关注 / 35 谨慎 / else 回避）
+- `synthesis.json` 同步携带 `school_scores` · 报告层无须回拉 panel.json
+- `assemble_report.py::render_school_scores` 渲染 7 卡片网格 · 配色按 verdict 语义
+- `assets/report-template.html` 新增 `<!-- INJECT_SCHOOL_SCORES -->` 锚点
+
+### 回归测试
+
+新增 `tests/test_v2_15_4_school_scores.py`（7 tests）· 全部过 ✅
+总套件 251 tests 仍 100% 通过.
+
+---
+
 ## v2.15.3 — 2026-04-21 (fetch_capital_flow 严重性能 bug hotfix)
 
 > **用户反馈**："数据源这一块还是很不稳定，请你检查好" · 审计发现最严重的 bug 在 fetch_capital_flow.

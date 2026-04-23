@@ -108,9 +108,15 @@ def test_stock_style_apply_weights_uses_0_6():
 
 
 def test_consensus_formula_version_label_v2_11():
-    """panel.json consensus_formula.version must advertise v2.11 for downstream agents."""
+    """panel.json consensus_formula.version must advertise v2.11 or later.
+
+    v2.15.5 升级到混合公式（0.65*score + 0.35*vote, polarize k=1.3）·
+    但保留 NEUTRAL_WEIGHT=0.6 · v2.11 投票机制是混合公式的一部分分量.
+    """
     src = (ROOT / "run_real_test.py").read_text(encoding="utf-8")
-    assert '"version": "v2.11' in src, "consensus_formula version label must be v2.11"
+    # 接受 v2.11 或 v2.15.5（当前）或任何后续升级
+    assert any(tag in src for tag in ('"version": "v2.11', '"version": "v2.15.5')), \
+        "consensus_formula version label must be v2.11 or v2.15.5 (mixed)"
 
 
 # ─── Sanity: end-to-end math ───

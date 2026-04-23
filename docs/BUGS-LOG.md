@@ -7,6 +7,52 @@
 
 ---
 
+## v2.15.5 (2026-04-23 · 评分聚集在一个区间 · 区分度不足)
+
+### BUG · consensus 公式把连续分压成三分类 + 规则严苛导致结构性居中
+- **症状**：用户反馈"现在评分大多数都在一个区间内徘徊" · 采 7 股数据 consensus 聚集 40-55 · 流派间分歧 stdev 常 < 15
+- **位置**：`run_real_test.py::generate_panel`（v2.11 原公式）+ `lib/investor_evaluator.py:69`（BULLISH_THRESHOLD=65 / BEARISH_THRESHOLD=35）
+- **根因 1（最主要）**：v2.11 公式 `(bullish + 0.6*neutral)/active*100` 只看 signal 计数 · 单 investor score 虽然 stdev=30 信息丰富 · 但被压成 3 分类后"打 55 分"和"打 40 分"一样算 neutral 贡献 · 程度丢失
+- **根因 2**：A 成长派规则严苛 · 平均 score 35 · D 技术派 51 · G 量化 58 · 跨流派结构性偏差 20 分
+- **影响**：7 流派 consensus 分布挤在 30-55 区间 · 用户看不出"宏观派买入 vs 价值派回避"这种真正的分歧信号
+- **修法**（3 步）：
+  1. `generate_panel` 引入 `SCORE_WEIGHT=0.65 + VOTE_WEIGHT=0.35` 混合公式 · `raw = 0.65*score_mean + 0.35*vote_weighted`
+  2. 加 `_polarize(c, k=1.3)` helper · `final = clip(50 + (raw-50)*1.3, 0, 100)` · 以 50 为中心把两端拉开
+  3. 总盘 + `school_scores` 每个流派同步升级 · 新增 `score_mean` / `vote_consensus` 分量字段让用户看到"实分 vs 投票"的拆解
+- **验证**：
+  - 002217 F 游资 51→43.7（vote 机制高估修正·实分 42）· G 量化 50→59.3（实分 61 低估修正）
+  - 总盘 range 从 62 → 68 分（两端更极端）
+  - 7 股样本没有再聚集 40-55 区间
+- **回归测试**：`tests/test_v2_15_4_school_scores.py`（9 tests · 含 `test_mixed_formula_polarizes_extremes` 校验数学 · `test_consensus_formula_in_panel_has_mixed_components` 守护常量）
+- **未来改该区域注意事项**：
+  - `SCORE_WEIGHT + VOTE_WEIGHT` 必须 == 1.0 · 否则 raw 会偏置
+  - `POLARIZE_K` 调大（>1.5）会让 consensus 容易贴 0/100 · 不建议 · 想进一步拉开优先改 BULLISH_THRESHOLD
+  - 若修改 `NEUTRAL_WEIGHT`（0.6→其他）· 必须同步 `stock_style.py::apply_style_weights` 里的 `neutral_w += w * 0.6`（v2.11 耦合）
+  - `_polarize` 对 50 分不变 · 如果改变中心点需要同步更新 `_consensus_to_verdict` 阈值
+  - 新增流派时 `school_scores` 聚合会自动处理 · 但 `GROUP_META` 要同步加 label + desc
+
+---
+
+## v2.15.4 (2026-04-22 · panel 只有总分看不到流派分歧)
+
+### FEATURE · 按流派打分 (school_scores)
+- **症状**：用户"打分系统我觉得可能还要优化一下，我们现在有几个流派，那么除了有一个最终分数，还要有不同流派各自给出的分数"· 51 位评委的分歧被聚合掉看不出来
+- **位置**：`run_real_test.py::generate_panel`（~line 740）+ `assemble_report.py::render_school_scores` + `assets/report-template.html`
+- **根因**：原设计只有一个 `panel_consensus` / `vote_distribution` / `signal_distribution` · 没有按 investor.group 分组聚合
+- **影响**：结构性矛盾票（譬如宏观友好但成长性差）看总分只是中性 · 用户无法快速判断到底是"共识中性"还是"各派互相抵消"
+- **修法**（3 改动）：
+  1. `generate_panel` 末尾加 `by_group` 聚合 · 每个流派用和总盘一致的 `(bullish + 0.6*neutral)/active * 100` 公式生成 consensus · active 成员 score 均值生成 avg_score · `_consensus_to_verdict` 阈值 80/65/50/35 与综合分对齐
+  2. `synthesis.json` 携带 `school_scores` · 报告层无须回拉 panel.json
+  3. `render_school_scores` 渲染 7 卡片网格（配色按 verdict 语义）· 注入 `<!-- INJECT_SCHOOL_SCORES -->` 锚点
+- **验证**：002217 · 宏观派 68 买入 vs 成长派 25 回避 · 分歧 43 分可见 · 总分 45.5 单看无法识别
+- **回归测试**：`tests/test_v2_15_4_school_scores.py`（7 tests · 聚合数学 / 阈值一致 / 模板锚点 / render 函数 / 空数据兜底）
+- **未来改该区域注意事项**：
+  - 如果修改 `NEUTRAL_WEIGHT` 或 consensus 公式 · 必须同步改 `generate_panel` 下面的流派聚合段 · 两处必须保持公式一致
+  - 如果新增/删除 investor · 需确认其 `group` 字段在 A-G 范围 · 否则 `school_scores` 会出现 `?` key
+  - 如果改 verdict 阈值（如 65→70）· 必须同步 `_consensus_to_verdict` 和 overall 的 `verdict_label` 两处
+
+---
+
 ## v2.15.3 (2026-04-21 · fetch_capital_flow 严重性能 bug)
 
 ### BUG · 每股重抓全 A 大宗/解禁/融资数据（3+ min/股）

@@ -738,28 +738,133 @@ def generate_panel(dims_scored: dict, raw: dict) -> dict:
             "what_would_change_my_mind": verdict_obj.get("what_would_change_my_mind", "—"),
         })
 
-    # v2.11 · consensus neutral 权重校准
-    # v2.9.1 半权公式（neutral 计 0.5）导致 A 股白马结构性偏低 — 51 评委里
-    # 价值派 + 游资合计 35 人对大多数股 neutral/skip，bullish 很难拉上 20 人，
-    # 白马典型 consensus ~37（茅台实测 47 分 → "谨慎"档）。
-    # 真实语义：neutral = "不坑但不是我心头好"，权重应接近中位数 60/100 而非 50/100
-    # 观察论坛+微信反馈（2026-04-18 @崔越 @W.D @睡袍布太少）：用户期望 65 分是及格线
-    # 修后：consensus = (bullish + 0.6*neutral) / active
+    # v2.15.5 · 混合 consensus 公式（连续分 + 离散票）
+    # 动机：v2.11 单一公式 `(bullish + 0.6*neutral)/active*100` 只看 signal 计数 ·
+    # 把连续 score 压成 3 分类 · 导致 331 个打分中 bullish:neutral:bearish=9.9:13:18.5 ·
+    # 多数股 consensus 聚集 40-55 区间分不开.
+    # 实测：单 investor score stdev=30.3 信息很丰富 · 但 consensus stdev 只有 28.2 还聚集 ·
+    # 说明 signal 分类丢失了"程度"信息（55 和 40 都算 neutral 但态度不同）.
+    #
+    # 新公式：consensus = 0.65 * score_mean + 0.35 * vote_weighted
+    #   - score_mean:  active 成员 score 均值（连续 0-100 · 反映强度）
+    #   - vote_weighted: 原 (bullish + 0.6*neutral)/active*100（保留投票机制）
+    # 学派级 school_scores 同样用混合公式 · 让各流派分数拉开.
+    # 回归风险：v2.11 下 65 分 = "可以蹲一蹲" · 新公式下因 score_mean 参与，
+    # 历史白马可能从 40+ 涨到 55+ · 属校准而非 bug · overall 阈值不变.
     NEUTRAL_WEIGHT = 0.6
+    SCORE_WEIGHT = 0.65   # score 均值权重（连续分 · 区分度）
+    VOTE_WEIGHT  = 0.35   # vote 比例权重（离散投票 · 稳定性）
+    POLARIZE_K = 1.30     # 极化系数 · >1 让两端拉开 · 50 为中心
     active_count = len(investors_out) - sig_dist.get("skip", 0)
     bullish = sig_dist.get("bullish", 0)
     neutral = sig_dist.get("neutral", 0)
-    consensus = (bullish + NEUTRAL_WEIGHT * neutral) / max(active_count, 1) * 100
+
+    def _polarize(c: float, k: float = POLARIZE_K) -> float:
+        """极化拉伸 · 50 为中心 · 距离 * k · 裁剪到 [0, 100].
+
+        目的：rule-engine 评分先天居中（大多股 35-65 区间）· 聚合后 consensus
+        更居中 · 用户反馈"大多数分在一个区间徘徊"· 极化让强势 70→86 · 弱势 22→14.
+        保留 50 为"及格线"不动 · 只放大距离.
+        """
+        return max(0.0, min(100.0, 50.0 + (c - 50.0) * k))
+
+    # 分量 1 · score 均值（active only · skip 不计）
+    active_scores = [m["score"] for m in investors_out if m.get("signal") != "skip"]
+    score_mean = (sum(active_scores) / len(active_scores)) if active_scores else 50.0
+    # 分量 2 · vote 比例（原 v2.11 公式）
+    vote_weighted = (bullish + NEUTRAL_WEIGHT * neutral) / max(active_count, 1) * 100
+    consensus_raw = SCORE_WEIGHT * score_mean + VOTE_WEIGHT * vote_weighted
+    consensus = _polarize(consensus_raw)
+
+    # v2.15.4+ · 按流派打分（v2.15.5 同步升级为混合公式）
+    # 譬如白马消费股：价值派 85 分（重仓），技术派 30 分（趋势破位）·
+    # 现在可以一眼看出"不同哲学得出的结论有多不同"
+    GROUP_META = {
+        "A": {"label": "经典价值派", "desc": "巴菲特 / 格雷厄姆 / 费雪 / 芒格 一脉"},
+        "B": {"label": "成长派",     "desc": "彼得·林奇 / 欧奈尔 / 蒂尔 / 伍德 一脉"},
+        "C": {"label": "宏观派",     "desc": "索罗斯 / 达利欧 / 马克斯 一脉"},
+        "D": {"label": "技术派",     "desc": "利弗莫尔 / Minervini / 达瓦斯 一脉"},
+        "E": {"label": "中式价投",   "desc": "段永平 / 张坤 / 朱少醒 / 冯柳 一脉"},
+        "F": {"label": "A 股游资",   "desc": "龙虎榜顶流 23 位·章盟主/孙哥/赵老哥为代表"},
+        "G": {"label": "量化派",     "desc": "Simons / Thorp / Shaw 一脉"},
+    }
+
+    def _consensus_to_verdict(c: float) -> str:
+        """流派级 verdict · 阈值与综合分保持一致（80/65/50/35）."""
+        if c >= 80: return "重仓"
+        if c >= 65: return "买入"
+        if c >= 50: return "关注"
+        if c >= 35: return "谨慎"
+        return "回避"
+
+    by_group: dict[str, list[dict]] = {}
+    for inv in investors_out:
+        by_group.setdefault(inv.get("group", "?"), []).append(inv)
+
+    school_scores: dict[str, dict] = {}
+    for g in sorted(by_group.keys()):
+        members = by_group[g]
+        n_members = len(members)
+        active_m = [m for m in members if m.get("signal") != "skip"]
+        n_active = len(active_m)
+        g_bull = sum(1 for m in members if m.get("signal") == "bullish")
+        g_neu  = sum(1 for m in members if m.get("signal") == "neutral")
+        g_bear = sum(1 for m in members if m.get("signal") == "bearish")
+        g_skip = sum(1 for m in members if m.get("signal") == "skip")
+
+        # v2.15.5 · 流派级混合公式（与总盘保持一致 · 同样极化）
+        if n_active > 0:
+            s_score_mean = sum(m.get("score", 0) for m in active_m) / n_active
+            s_vote = (g_bull + NEUTRAL_WEIGHT * g_neu) / n_active * 100
+            s_raw = SCORE_WEIGHT * s_score_mean + VOTE_WEIGHT * s_vote
+            s_consensus = _polarize(s_raw)
+        else:
+            s_score_mean = 0.0
+            s_vote = 0.0
+            s_consensus = 0.0
+
+        # 主流信号
+        sig_counts = [("bullish", g_bull), ("neutral", g_neu), ("bearish", g_bear)]
+        dominant = max(sig_counts, key=lambda x: x[1])[0] if n_active > 0 else "skip"
+
+        meta = GROUP_META.get(g, {"label": g, "desc": ""})
+        school_scores[g] = {
+            "group": g,
+            "label": meta["label"],
+            "desc": meta["desc"],
+            "n_members": n_members,
+            "n_active": n_active,
+            "consensus": round(s_consensus, 1),
+            "avg_score": round(s_score_mean, 1),  # alias · 兼容 v2.15.4 字段
+            "vote_consensus": round(s_vote, 1),   # v2.15.5 · vote 分量（可视化展开用）
+            "score_mean": round(s_score_mean, 1), # v2.15.5 · score 分量 · 明确语义
+            "verdict": _consensus_to_verdict(s_consensus) if n_active > 0 else "不适合",
+            "bullish": g_bull,
+            "neutral": g_neu,
+            "bearish": g_bear,
+            "skip": g_skip,
+            "dominant_signal": dominant,
+        }
+
     return {
         "ticker": raw["ticker"],
         "panel_consensus": round(consensus, 1),
         "vote_distribution": vote_dist,
         "signal_distribution": sig_dist,
         "investors": investors_out,
-        # v2.11 · 诊断字段，方便 agent / 自查看到公式
+        # v2.15.4 · 按流派分数 · 7 个 school 各自 consensus/avg_score/verdict
+        "school_scores": school_scores,
+        # v2.15.5 · 诊断字段 · 混合公式各分量 + 极化前后值
         "consensus_formula": {
-            "version": "v2.11 · (bullish + 0.6*neutral) / active",
+            "version": "v2.15.5 · polarize(0.65*score_mean + 0.35*vote_weighted, k=1.3)",
+            "score_weight": SCORE_WEIGHT,
+            "vote_weight": VOTE_WEIGHT,
             "neutral_weight": NEUTRAL_WEIGHT,
+            "polarize_k": POLARIZE_K,
+            "score_mean": round(score_mean, 2),
+            "vote_weighted": round(vote_weighted, 2),
+            "consensus_raw": round(consensus_raw, 2),     # 极化前
+            "consensus_final": round(consensus, 2),        # 极化后（= panel_consensus）
             "bullish": bullish,
             "neutral_weighted": round(neutral * NEUTRAL_WEIGHT, 2),
             "bearish": sig_dist.get("bearish", 0),
@@ -1407,6 +1512,8 @@ def generate_synthesis(raw: dict, dims_scored: dict, panel: dict, agent_analysis
         "verdict_label": verdict_label,
         "fundamental_score": round(fund_score, 1),
         "panel_consensus": round(consensus, 1),
+        # v2.15.4 · 按流派分数也带到 synthesis · 让报告层无须回拉 panel.json
+        "school_scores": panel.get("school_scores", {}),
         "dim_commentary": dim_commentary_final,  # agent-written > stub
         "institutional_modeling": {
             "dcf_intrinsic": dcf_summary.get("dcf_intrinsic"),
